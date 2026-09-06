@@ -21,11 +21,10 @@
 
 | 依赖 | 版本 | 类型 |
 |---|---|---|
-| Modern Industrialization | 2.5.6 | required |
-| Applied Energistics 2 | 19.2.17 | required |
-| Extended Industrialization | 1.16.2 | optional（功能依赖其处理阵列） |
+| Applied Energistics 2 | 19.2.17 | required（硬依赖） |
+| Extended Industrialization | 1.16.2 | required（硬依赖，提供处理阵列） |
 
-> Tesseract API（EI 前置）与 GuideME 由上述依赖传递引入。
+> Modern Industrialization、Tesseract API、GuideME 由 AE2 / EI 传递引入（EI 硬依赖 MI + tesseract + guideme；AE2 硬依赖 guideme），无需单独声明。
 
 ## 构建
 
