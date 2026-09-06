@@ -174,4 +174,4 @@
 - 超堆叠：用「无上限」标记 mixin `ConfigurableItemStack`（`Integer.MAX_VALUE`），未做升级/倍率（用户决定）。
 - GUI：未做自定义 Menu/Screen，复用 AE2 `PatternProviderMenu`；MI 槽位 GUI 仅作扳手后手。
 - 保存：MI `saveAdditional/loadAdditional` 是 `final` → 用自定义 `MachineComponent` 挂 `logic` 的 NBT。
-- 扩展仓方块**无条件注册**（否则挖掘标签引用未注册方块会让 `mineable/pickaxe` 整表失效，连普通仓都挖不动）；获取渠道由配方/升级门控，代价是创造栏可见（即便没装 ExtendedAE）。
+- 扩展仓方块**仅 ExtendedAE 存在时注册**；挖掘标签（`mineable/pickaxe`、`needs_stone_tool`）用 NeoForge 的 per-entry 条件（`neoforge:conditions` + `mod_loaded extendedae`）门控扩展仓条目，普通仓无条件。这样无 ExtendedAE 时扩展仓不存在、也不会因标签引用未注册方块报错。
