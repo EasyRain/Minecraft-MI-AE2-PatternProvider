@@ -165,10 +165,13 @@
 - **命名**：样板管理终端显示「<工作方块>处理阵列样板供应仓」（覆写 `getTerminalGroup()`）；无工作方块时「ME样板供应仓」。
 - **材质**：自定义机壳 `MachineCasings.create`（`供应仓.png`，单独放置/拿手上的样式）+ 成型后 `overlay_side.png` 侧面叠层（去掉 item_auto/fluid_auto/output）。
 - **挖掘掉落**：覆写 `dropExtra()` 调 `logic.addDrops()` 掉落样板/返回区/在途输出；`mineable/pickaxe` + `needs_stone_tool` 标签。
-- **预留**：`扩展供应仓.png` 已入资源，供未来「ME 扩展样板供应仓」（4×9 样板，对齐 ExtendedAE）使用。
+- **扩展仓（ME 扩展样板供应仓，36 样板，对齐 ExtendedAE）**：复用同一 `MePatternProviderBlockEntity`（构造参数化 `patternSlots`/`hatchType`/`extended`/`iconSupplier`），`MePatternProviderLogic(mainNode, host, 36)`；菜单 `ContainerExtendedPatternProvider` + 界面复用 ExtendedAE 的 `ex_pattern_provider.json` 样式；命名「ME扩展样板供应仓」/「xxx处理阵列扩展样板供应仓」。
+- **升级**：手持 `extendedae:pattern_provider_upgrade` + shift 右键普通仓 → `RightClickBlock` 事件里 `upgradeToExtended()`（`saveWithFullMetadata`→换块→`loadWithComponents` 保留库存+样板）。
+- **配方**：① 普通仓合成表（玻璃线缆×4 + 物品输入/输出仓 + 流体输入/输出仓 + AE2 样板供应器，仓按任意等级标签匹配）；② 扩展仓水晶装配器配方（`extendedae:crystal_assembler`，`neoforge:mod_loaded extendedae` 门控）。
 
 ### 与计划的差异
 
 - 超堆叠：用「无上限」标记 mixin `ConfigurableItemStack`（`Integer.MAX_VALUE`），未做升级/倍率（用户决定）。
 - GUI：未做自定义 Menu/Screen，复用 AE2 `PatternProviderMenu`；MI 槽位 GUI 仅作扳手后手。
 - 保存：MI `saveAdditional/loadAdditional` 是 `final` → 用自定义 `MachineComponent` 挂 `logic` 的 NBT。
+- 扩展仓方块**无条件注册**（否则挖掘标签引用未注册方块会让 `mineable/pickaxe` 整表失效，连普通仓都挖不动）；获取渠道由配方/升级门控，代价是创造栏可见（即便没装 ExtendedAE）。

@@ -86,6 +86,10 @@ dependencies {
     localRuntime files("libs/appliedenergistics2-19.2.17.jar")
     // guideme is a required dependency of MI / EI / AE2.
     localRuntime files("libs/guideme-21.1.17.jar")
+    // ExtendedAE 仅用于 dev 运行时测试扩展供应仓的升级/配方（本 mod 不硬依赖它）。
+    localRuntime files("libs/ExtendedAE-1.21-2.2.36-neoforge.jar")
+    // glodium 是 ExtendedAE 的前置库。
+    localRuntime files("libs/Glodium-1.21-2.2-neoforge.jar")
 }
 
 // Copy the local dependency jars into run/mods before launching the dev client/server.

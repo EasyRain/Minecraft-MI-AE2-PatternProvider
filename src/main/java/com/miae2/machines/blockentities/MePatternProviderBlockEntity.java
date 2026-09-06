@@ -35,6 +35,7 @@ import aztech.modern_industrialization.machines.components.OrientationComponent;
 import aztech.modern_industrialization.machines.gui.MachineGuiParameters;
 import aztech.modern_industrialization.machines.multiblocks.HatchBlockEntity;
 import aztech.modern_industrialization.machines.multiblocks.HatchType;
+import com.miae2.ae.ContainerExtendedPatternProvider;
 import com.miae2.ae.MePatternProviderLogic;
 import com.miae2.machines.init.ModHatches;
 import com.miae2.mixin.ProcessingArrayBlockEntityAccessor;
@@ -43,23 +44,31 @@ import com.miae2.util.IUnboundedItemAccessor;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.function.Supplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup.Provider;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.Nameable;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.swedz.extended_industrialization.machines.blockentity.multiblock.ProcessingArrayBlockEntity;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
+import com.mojang.logging.LogUtils;
 
 /**
  * ME 样板供应仓：单方块同时承担物品输入/输出 + 流体输入/输出四种接口，并且是 AE2 网格节点 +
@@ -67,6 +76,8 @@ import org.jetbrains.annotations.Nullable;
  */
 public class MePatternProviderBlockEntity extends HatchBlockEntity
         implements IInWorldGridNodeHost, IGridNodeListener<MePatternProviderBlockEntity>, PatternProviderLogicHost, IActionHost, Nameable, IControllerPosHolder {
+
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     private final List<ConfigurableItemStack> itemInputs;
     private final List<ConfigurableItemStack> itemOutputs;
@@ -76,6 +87,12 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
 
     private final IManagedGridNode mainNode;
     private final MePatternProviderLogic logic;
+
+    // 本仓的仓类型（普通 vs 扩展）与样板槽数量、方块图标
+    private final HatchType hatchType;
+    private final int patternSlots;
+    private final boolean extended;
+    private final Supplier<Item> iconSupplier;
 
     // 当前正在处理（累计发配材料中 / 机器制作中）的样板；null 表示空闲
     private IPatternDetails activePattern;
@@ -90,9 +107,17 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
             int itemOutSlots,
             int fluidInSlots,
             int fluidOutSlots,
-            long fluidCapacity
+            long fluidCapacity,
+            HatchType hatchType,
+            int patternSlots,
+            boolean extended,
+            Supplier<Item> iconSupplier
     ) {
         super(bep, guiParams, OrientationComponent.Params.noFacingNoOutput());
+        this.hatchType = hatchType;
+        this.patternSlots = patternSlots;
+        this.extended = extended;
+        this.iconSupplier = iconSupplier;
 
         this.itemInputs = new ArrayList<>();
         this.itemOutputs = new ArrayList<>();
@@ -131,10 +156,10 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
 
         // AE2 节点与样板供应器逻辑
         this.mainNode = GridHelper.createManagedNode(this, this)
-                .setVisualRepresentation(ModHatches.ME_PATTERN_PROVIDER_BLOCK.blockDefinition().asItem())
+                .setVisualRepresentation(iconSupplier.get())
                 .setInWorldNode(true)
                 .setTagName("me_pattern_provider");
-        this.logic = new MePatternProviderLogic(this.mainNode, this, this);
+        this.logic = new MePatternProviderLogic(this.mainNode, this, this, patternSlots);
         this.registerComponents(new LogicComponent());
     }
 
@@ -230,18 +255,22 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
 
     @Override
     public AEItemKey getTerminalIcon() {
-        return AEItemKey.of(ModHatches.ME_PATTERN_PROVIDER_BLOCK.blockDefinition().asItem());
+        return AEItemKey.of(this.iconSupplier.get());
     }
 
     @Override
     public ItemStack getMainMenuIcon() {
-        return new ItemStack(ModHatches.ME_PATTERN_PROVIDER_BLOCK.blockDefinition().asItem());
+        return new ItemStack(this.iconSupplier.get());
     }
 
     /** 右键打开 AE2 的样板供应器界面（放样板），而不是 MI 的槽位界面。 */
     @Override
     public void openMenu(ServerPlayer player) {
-        MenuOpener.open(PatternProviderMenu.TYPE, player, MenuLocators.forBlockEntity(this));
+        if (this.extended) {
+            MenuOpener.open(ContainerExtendedPatternProvider.TYPE, player, MenuLocators.forBlockEntity(this));
+        } else {
+            MenuOpener.open(PatternProviderMenu.TYPE, player, MenuLocators.forBlockEntity(this));
+        }
     }
 
     /** 手持任意扳手右键：打开 MI 原生槽位界面（用于手动取出卡住的物品/流体）。 */
@@ -259,6 +288,32 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         List<ItemStack> drops = super.dropExtra();
         this.logic.addDrops(drops);
         return drops;
+    }
+
+    /** 把当前普通供应仓原位替换为扩展供应仓，保留库存与样板数据（由 RightClickBlock 事件触发）。 */
+    public boolean upgradeToExtended() {
+        if (this.extended || this.level == null || this.level.isClientSide() || ModHatches.ME_EXTENDED_PATTERN_PROVIDER_BLOCK == null) {
+            return false;
+        }
+        BlockPos pos = this.getBlockPos();
+        BlockState extState = ModHatches.ME_EXTENDED_PATTERN_PROVIDER_BLOCK.asBlock().defaultBlockState();
+        CompoundTag contents = this.saveWithFullMetadata(this.level.registryAccess());
+        BlockEntity newTile = ModHatches.ME_EXTENDED_PATTERN_PROVIDER_BLOCK.blockEntityType().get().create(pos, extState);
+        if (newTile == null) {
+            return false;
+        }
+        this.level.removeBlockEntity(pos);
+        this.level.removeBlock(pos, false);
+        this.level.setBlock(pos, extState, 3);
+        this.level.setBlockEntity(newTile);
+        newTile.loadWithComponents(contents, this.level.registryAccess());
+        newTile.setChanged();
+        return true;
+    }
+
+    public static boolean isPatternProviderUpgrade(ItemStack stack) {
+        return ResourceLocation.fromNamespaceAndPath("extendedae", "pattern_provider_upgrade")
+                .equals(BuiltInRegistries.ITEM.getKey(stack.getItem()));
     }
 
     // ---------- Nameable / 自动命名 ----------
@@ -286,7 +341,7 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         this.controllerPos = pos;
     }
 
-    /** 根据控制器（处理阵列）里放的工作方块自动命名。 */
+    /** 根据控制器（处理阵列）里放的工作方块自动命名（扩展版带「扩展」前缀）。 */
     private Component computeAutoName() {
         ProcessingArrayBlockEntity controller = this.findController();
         if (controller != null) {
@@ -296,10 +351,14 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
                 if (machines.has(DataComponents.CUSTOM_NAME)) {
                     return workBlockName;
                 }
-                return workBlockName.copy().append(Component.translatable("text.mi_ae2_pattern_provider.processing_array_suffix"));
+                return workBlockName.copy().append(Component.translatable(this.extended
+                        ? "text.mi_ae2_pattern_provider.extended_processing_array_suffix"
+                        : "text.mi_ae2_pattern_provider.processing_array_suffix"));
             }
         }
-        return Component.translatable("text.mi_ae2_pattern_provider.hatch_name");
+        return Component.translatable(this.extended
+                ? "text.mi_ae2_pattern_provider.extended_hatch_name"
+                : "text.mi_ae2_pattern_provider.hatch_name");
     }
 
     private ProcessingArrayBlockEntity findController() {
@@ -509,7 +568,7 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
     @NotNull
     @Override
     public HatchType getHatchType() {
-        return ModHatches.ME_PATTERN_PROVIDER;
+        return this.hatchType;
     }
 
     @Override

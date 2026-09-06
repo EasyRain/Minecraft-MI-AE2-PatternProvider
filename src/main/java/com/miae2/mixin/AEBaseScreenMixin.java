@@ -26,9 +26,9 @@ public abstract class AEBaseScreenMixin {
     @Inject(method = "updateBeforeRender", at = @At("TAIL"))
     private void miae2$setDialogTitle(CallbackInfo ci) {
         AbstractContainerMenu menu = ((AbstractContainerScreen) (Object) this).getMenu();
-        if (menu instanceof AEBaseMenu aeMenu && aeMenu.getBlockEntity() instanceof MePatternProviderBlockEntity) {
-            this.invokeSetTextContent("dialog_title",
-                    Component.translatable("block.modern_industrialization.me_pattern_provider_hatch"));
+        if (menu instanceof AEBaseMenu aeMenu && aeMenu.getBlockEntity() instanceof MePatternProviderBlockEntity be) {
+            // 用方块自身名称（普通「ME样板供应仓」/ 扩展「ME扩展样板供应仓」）
+            this.invokeSetTextContent("dialog_title", be.getName());
         }
     }
 }

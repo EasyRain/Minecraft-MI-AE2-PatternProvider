@@ -25,7 +25,7 @@ public class HatchFlagsMixin {
 
     @Inject(method = "allows", at = @At("HEAD"), cancellable = true, require = 1)
     public void miae2$allows(HatchType type, CallbackInfoReturnable<Boolean> cir) {
-        if (type == ModHatches.ME_PATTERN_PROVIDER) {
+        if (type == ModHatches.ME_PATTERN_PROVIDER || type == ModHatches.ME_EXTENDED_PATTERN_PROVIDER) {
             cir.setReturnValue(
                     this.allowed.contains(HatchTypes.ITEM_INPUT)
                             || this.allowed.contains(HatchTypes.FLUID_INPUT)

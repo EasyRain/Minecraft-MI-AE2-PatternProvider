@@ -1,0 +1,33 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "CIC",
+    "XPY",
+    "COC"
+  ],
+  "key": {
+    "C": {
+      "tag": "ae2:glass_cable"
+    },
+    "I": {
+      "tag": "mi_ae2_pattern_provider:item_input_hatches"
+    },
+    "O": {
+      "tag": "mi_ae2_pattern_provider:item_output_hatches"
+    },
+    "X": {
+      "tag": "mi_ae2_pattern_provider:fluid_input_hatches"
+    },
+    "Y": {
+      "tag": "mi_ae2_pattern_provider:fluid_output_hatches"
+    },
+    "P": {
+      "item": "ae2:pattern_provider"
+    }
+  },
+  "result": {
+    "id": "modern_industrialization:me_pattern_provider_hatch",
+    "count": 1
+  }
+}

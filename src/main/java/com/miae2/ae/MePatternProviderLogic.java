@@ -16,8 +16,8 @@ public class MePatternProviderLogic extends PatternProviderLogic {
 
     private final MePatternProviderBlockEntity be;
 
-    public MePatternProviderLogic(IManagedGridNode mainNode, PatternProviderLogicHost host, MePatternProviderBlockEntity be) {
-        super(mainNode, host);
+    public MePatternProviderLogic(IManagedGridNode mainNode, PatternProviderLogicHost host, MePatternProviderBlockEntity be, int patternInventorySize) {
+        super(mainNode, host, patternInventorySize);
         this.be = be;
     }
 

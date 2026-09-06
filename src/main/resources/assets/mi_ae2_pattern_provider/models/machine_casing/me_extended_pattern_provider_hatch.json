@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/cube_all",
+  "textures": {
+    "all": "mi_ae2_pattern_provider:block/me_extended_pattern_provider_hatch"
+  }
+}
