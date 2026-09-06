@@ -1,6 +1,14 @@
 {
   "values": [
     "modern_industrialization:me_pattern_provider_hatch",
-    "modern_industrialization:me_extended_pattern_provider_hatch"
+    {
+      "id": "modern_industrialization:me_extended_pattern_provider_hatch",
+      "neoforge:conditions": [
+        {
+          "type": "neoforge:mod_loaded",
+          "modid": "extendedae"
+        }
+      ]
+    }
   ]
 }

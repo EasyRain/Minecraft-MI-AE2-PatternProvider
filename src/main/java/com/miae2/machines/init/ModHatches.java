@@ -12,6 +12,7 @@ import com.miae2.MiAe2PatternProvider;
 import com.miae2.ae.ContainerExtendedPatternProvider;
 import com.miae2.machines.blockentities.MePatternProviderBlockEntity;
 import net.minecraft.resources.ResourceLocation;
+import net.neoforged.fml.ModList;
 
 /**
  * 注册 ME 样板供应仓（普通 9 样板）与 ME 扩展样板供应仓（36 样板）的自定义 HatchType 与方块。
@@ -72,20 +73,21 @@ public final class ModHatches {
                 MachineBlockEntity::registerFluidApi
         );
 
-        // 扩展版：无条件注册方块（否则挖掘标签会引用不存在的方块导致 mineable/pickaxe 整表失效）。
-        // 获取渠道（升级物品 shift 右键 / 水晶装配器配方）由 ExtendedAE 提供，配方本身用 neoforge:conditions 门控。
-        ME_EXTENDED_PATTERN_PROVIDER_BLOCK = MachineRegistrationHelper.registerMachine(
-                "ME Extended Pattern Provider",
-                "me_extended_pattern_provider_hatch",
-                bet -> new MePatternProviderBlockEntity(
-                        bet,
-                        new MachineGuiParameters.Builder("me_extended_pattern_provider_hatch", true).backgroundHeight(190).build(),
-                        ITEM_INPUT_SLOTS, ITEM_OUTPUT_SLOTS, FLUID_INPUT_SLOTS, FLUID_OUTPUT_SLOTS, FLUID_CAPACITY,
-                        ME_EXTENDED_PATTERN_PROVIDER, 36, true,
-                        () -> ME_EXTENDED_PATTERN_PROVIDER_BLOCK.blockDefinition().asItem()
-                ),
-                MachineBlockEntity::registerItemApi,
-                MachineBlockEntity::registerFluidApi
-        );
+        // 扩展版：仅在安装了 ExtendedAE 时注册方块（无 ExtendedAE 则方块不存在，进存档即消失）。
+        if (ModList.get().isLoaded("extendedae")) {
+            ME_EXTENDED_PATTERN_PROVIDER_BLOCK = MachineRegistrationHelper.registerMachine(
+                    "ME Extended Pattern Provider",
+                    "me_extended_pattern_provider_hatch",
+                    bet -> new MePatternProviderBlockEntity(
+                            bet,
+                            new MachineGuiParameters.Builder("me_extended_pattern_provider_hatch", true).backgroundHeight(190).build(),
+                            ITEM_INPUT_SLOTS, ITEM_OUTPUT_SLOTS, FLUID_INPUT_SLOTS, FLUID_OUTPUT_SLOTS, FLUID_CAPACITY,
+                            ME_EXTENDED_PATTERN_PROVIDER, 36, true,
+                            () -> ME_EXTENDED_PATTERN_PROVIDER_BLOCK.blockDefinition().asItem()
+                    ),
+                    MachineBlockEntity::registerItemApi,
+                    MachineBlockEntity::registerFluidApi
+            );
+        }
     }
 }
