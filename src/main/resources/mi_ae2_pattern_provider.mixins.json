@@ -1,0 +1,19 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.miae2.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "HatchFlagsMixin",
+    "ConfigurableItemStackMixin",
+    "PatternProviderLogicInvoker",
+    "ShapeMatcherMixin",
+    "ProcessingArrayBlockEntityAccessor"
+  ],
+  "client": [
+    "AEBaseScreenMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
