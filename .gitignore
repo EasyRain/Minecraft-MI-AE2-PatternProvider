@@ -15,3 +15,6 @@ out/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local agent/developer notes for this project only (local continuity notes)
+/PROJECT_MEMORY.md
