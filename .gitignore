@@ -16,5 +16,6 @@ out/
 .DS_Store
 Thumbs.db
 
-# Local agent/developer notes for this project only (local continuity notes)
+# Local agent/developer notes and upload copy for this project only (local archive)
 /PROJECT_MEMORY.md
+/MODRINTH_DESCRIPTION.md
