@@ -186,7 +186,43 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
     @Override
     public void clearRemoved() {
         super.clearRemoved();
-        GridHelper.onFirstTick(this, be -> this.mainNode.create(be.getLevel(), be.getBlockPos()));
+        GridHelper.onFirstTick(this, be -> this.miae2$ensureNode());
+    }
+
+    /**
+     * 确保 AE 网格节点已创建。
+     *
+     * <p>不只在 {@code GridHelper.onFirstTick} 里做（那次回调在某些加载/替换方块实体的场景下不触发，
+     * 我们已经在读档初始化上踩过一次），{@code tick()} 每帧也会兜一次，创建成功后是个纯判断、几乎零开销。
+     *
+     * <p>创建成功后补一次 {@code miae2$restoreChannelCard()}：EAEP 的频道卡是在
+     * {@code PatternProviderLogic.readFromNBT} 的 TAIL 就 {@code onLoaded()} 的，那时我们的节点还不存在，
+     * 它内部的 {@code wakeNode} 会落空 → 链路再也建不起来（表现为「频道卡连接，重进存档后一直断开」，
+     * 而电缆连接不受影响）。节点就绪后重新请它恢复一次即可。
+     */
+    private void miae2$ensureNode() {
+        if (this.mainNode.getNode() != null || this.level == null) {
+            return;
+        }
+        this.mainNode.create(this.level, this.getBlockPos());
+        this.miae2$restoreChannelCard();
+    }
+
+    /** 反射请求 EAEP 的频道卡控制器重新建立无线链路；没装 EAEP 时静默跳过。 */
+    private void miae2$restoreChannelCard() {
+        try {
+            Method getController = this.logic.getClass().getMethod("eap$getChannelCardController");
+            Object controller = getController.invoke(this.logic);
+            if (controller == null) {
+                return;
+            }
+            controller.getClass().getMethod("onLoaded").invoke(controller);
+            LOGGER.info("[节点] 网格节点就绪，已请求 EAEP 重新建立频道卡连接 @ {}", this.getBlockPos());
+        } catch (NoSuchMethodException ignored) {
+            // 未安装 ExtendedAE-Plus（或它没有频道卡功能）→ 正常
+        } catch (Throwable t) {
+            LOGGER.warn("[节点] 重建频道卡连接失败", t);
+        }
     }
 
     /**
@@ -335,12 +371,15 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         }
         // 读档初始化走这里、而不是 AE2 的 GridHelper.onFirstTick：后者在「手动创建/替换方块实体」
         // 的场景（我们的升级路径、以及单元测试复现读档）下不一定触发，挂在它上面会静默不执行。
+        // 节点创建也兜在这里（不只靠 GridHelper.onFirstTick）：创建成功后是纯判断，几乎零开销。
+        this.miae2$ensureNode();
         if (!this.loadInitDone) {
             this.loadInitDone = true;
             this.miae2$onLoadInit();
         }
         this.drainOutputsToReturnInv();
-        this.updateActivePattern();    }
+        this.updateActivePattern();
+    }
 
     // ---------- IInWorldGridNodeHost ----------
 
@@ -755,6 +794,11 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
 
     /** push 入口（供 MePatternProviderLogic 调用）：同一样板累计发配，不同样板排队。 */
     public boolean pushPattern(IPatternDetails patternDetails, KeyCounter[] inputHolder) {
+        // 没被任何多方块匹配上就不收料：可能是还没成形，也可能是「同一阵列放了多个供应仓 → 结构被判无效」。
+        // 否则 AE 会把材料灌进一个永远不会被消耗的仓里，任务就一直挂着。
+        if (!this.isMatched()) {
+            return false;
+        }
         if (this.activePattern != null && this.activePattern != patternDetails) {
             return false;
         }
@@ -864,6 +908,12 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
     /** 同上，流体侧。 */
     public List<ConfigurableFluidStack> miae2$fluidInputs() {
         return this.fluidInputs;
+    }
+
+    /** 网格节点是否在线（供悬浮提示显示「设备在线/离线」，与 AE2 自己的机器一致）。 */
+    public boolean miae2$isNodeOnline() {
+        var node = this.mainNode.getNode();
+        return node != null && node.isActive();
     }
 
     @Override

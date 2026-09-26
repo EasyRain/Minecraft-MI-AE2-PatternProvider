@@ -8,5 +8,7 @@
   "item.mi_ae2_pattern_provider.advanced_overclock_module": "高级超频模块",
   "item.mi_ae2_pattern_provider.advanced_overclock_module.desc1": "装进 MI 电动机器（含处理阵列控制器）的超频模块槽。",
   "item.mi_ae2_pattern_provider.advanced_overclock_module.desc2": "机器开局即按最高效率运行，且做完立刻释放配方，不锁配方。",
-  "mod.mi_ae2_pattern_provider": "MI AE2 样板供应器"
+  "mod.mi_ae2_pattern_provider": "MI AE2 样板供应器",
+  "jade.mi_ae2_pattern_provider.device_online": "设备在线",
+  "jade.mi_ae2_pattern_provider.device_offline": "设备离线"
 }
