@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "mi_ae2_pattern_provider:item/advanced_overclock_module"
+  }
+}

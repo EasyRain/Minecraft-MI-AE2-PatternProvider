@@ -9,7 +9,6 @@ import aztech.modern_industrialization.machines.models.MachineCasings;
 import aztech.modern_industrialization.machines.multiblocks.HatchType;
 import aztech.modern_industrialization.machines.multiblocks.HatchTypes;
 import com.miae2.MiAe2PatternProvider;
-import com.miae2.ae.ContainerExtendedPatternProvider;
 import com.miae2.machines.blockentities.MePatternProviderBlockEntity;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.fml.ModList;
@@ -37,6 +36,12 @@ public final class ModHatches {
     public static final int FLUID_OUTPUT_SLOTS = 9;
     // 超堆叠直接到上限（单等级、无升级）
     public static final long FLUID_CAPACITY = Integer.MAX_VALUE;
+    /**
+     * 扩展仓的样板槽数：底层库存按 <b>4 页 = 144</b> 预留，实际对外暴露几页由
+     * ExtendedAE-Plus 的扩容卡决定（见 {@code MePatternProviderLogic#getPatternInv}）。
+     * 无 EAEP / 取不到升级槽时会保守地只暴露 1 页（36）。
+     */
+    public static final int EXTENDED_PATTERN_SLOTS = 36 * 4;
 
     public static MachineDefinition<MePatternProviderBlockEntity> ME_PATTERN_PROVIDER_BLOCK;
     public static MachineDefinition<MePatternProviderBlockEntity> ME_EXTENDED_PATTERN_PROVIDER_BLOCK;
@@ -45,10 +50,6 @@ public final class ModHatches {
     }
 
     public static void init() {
-        // 强制初始化扩展菜单类型：否则 MenuTypeBuilder.build 的 queueRegistration 会晚于 AE2 的 RegisterEvent，
-        // 菜单类型注册不上 → 右键打开扩展仓 GUI 时服务端写开屏包抛异常 → 断开连接。
-        ContainerExtendedPatternProvider.TYPE.getClass();
-
         // 自定义机壳（基础方块材质），模型见 assets/mi_ae2_pattern_provider/models/machine_casing/*.json
         MachineCasings.create(
                 ResourceLocation.fromNamespaceAndPath(MiAe2PatternProvider.MOD_ID, "me_pattern_provider_hatch"),
@@ -82,7 +83,7 @@ public final class ModHatches {
                             bet,
                             new MachineGuiParameters.Builder("me_extended_pattern_provider_hatch", true).backgroundHeight(190).build(),
                             ITEM_INPUT_SLOTS, ITEM_OUTPUT_SLOTS, FLUID_INPUT_SLOTS, FLUID_OUTPUT_SLOTS, FLUID_CAPACITY,
-                            ME_EXTENDED_PATTERN_PROVIDER, 36, true,
+                            ME_EXTENDED_PATTERN_PROVIDER, EXTENDED_PATTERN_SLOTS, true,
                             () -> ME_EXTENDED_PATTERN_PROVIDER_BLOCK.blockDefinition().asItem()
                     ),
                     MachineBlockEntity::registerItemApi,

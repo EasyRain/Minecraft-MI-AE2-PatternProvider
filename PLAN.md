@@ -14,7 +14,7 @@
 - **mod id**：`mi_ae2_pattern_provider`
 - **项目文件夹**：`D:\DshWorkSpace\MCMOD\MI-AE2-PatternProvider\`
 - **AE2 依赖**：硬依赖（required）
-- **参考 mod**（用户提供，在项目文件夹内，已反编译到 `.ref\mih-src`、`.ref\misu-src`）：
+- **参考 mod**（用户提供，在项目文件夹内，已反编译到 `.ref\decompiled\libs\mih-src`、`.ref\decompiled\libs\misu-src`）：
   - `mi_itemfluid_hatch-1.0.3.jar`：物品+流体合一输入/输出仓（作者 KuDikan）
   - `mi_stack_upgrade-1.0.2.jar`：增加输入输出仓堆叠（作者 KuDikan）
 
@@ -32,7 +32,7 @@
 
 ## 3. 关键调研结论（已反编译核实）
 
-反编译产物：`.ref\mi-src`（MI 2.5.6）、`.ref\ei-src`（EI 1.16.2）、`.ref\ae2-src`（AE2 19.2.17）、`.ref\mih-src`、`.ref\misu-src`。
+反编译产物（均在 `.ref\decompiled\libs\`）：`mi-src`（MI 2.5.6）、`ei-src`（EI 1.16.2）、`ae2-src`（AE2 19.2.17）、`mih-src`、`misu-src`。
 
 ### 3.1 MI 仓（hatch）系统
 
@@ -137,7 +137,7 @@
 
 ## 6. 参考资料
 
-- 反编译源码：`.ref\mi-src`、`.ref\ei-src`、`.ref\ae2-src`、`.ref\mih-src`、`.ref\misu-src`
+- 反编译源码（`.ref\decompiled\libs\`）：`mi-src`、`ei-src`、`ae2-src`、`mih-src`、`misu-src`
 - 参考 mod（项目文件夹内）：`mi_itemfluid_hatch-1.0.3.jar`、`mi_stack_upgrade-1.0.2.jar`
 - 同类实现（测试客户端内）：`AdvancedAE`（`AdvPatternProviderLogic`）、`ExtendedAE`（`TileExPatternProvider`）
 - 上游仓库：[Modern Industrialization](https://github.com/AztechMC/Modern-Industrialization)、[Extended Industrialization](https://github.com/Swedz/Extended-Industrialization)、[Applied Energistics 2](https://github.com/AppliedEnergistics/Applied-Energistics-2)

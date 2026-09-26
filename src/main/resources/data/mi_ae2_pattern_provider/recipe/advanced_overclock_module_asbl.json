@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "sds",
+    "scs",
+    "sds"
+  ],
+  "key": {
+    "s": {
+      "item": "modern_industrialization:stainless_steel_plate"
+    },
+    "d": {
+      "item": "modern_industrialization:digital_circuit"
+    },
+    "c": {
+      "item": "modern_industrialization:overdrive_module"
+    }
+  },
+  "result": {
+    "id": "mi_ae2_pattern_provider:advanced_overclock_module"
+  }
+}

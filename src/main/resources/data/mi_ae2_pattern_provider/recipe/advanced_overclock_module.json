@@ -1,0 +1,25 @@
+{
+  "type": "modern_industrialization:assembler",
+  "duration": 300,
+  "eu": 16,
+  "item_inputs": [
+    {
+      "amount": 1,
+      "item": "modern_industrialization:overdrive_module"
+    },
+    {
+      "amount": 2,
+      "item": "modern_industrialization:digital_circuit"
+    },
+    {
+      "amount": 4,
+      "item": "modern_industrialization:stainless_steel_plate"
+    }
+  ],
+  "item_outputs": [
+    {
+      "amount": 1,
+      "item": "mi_ae2_pattern_provider:advanced_overclock_module"
+    }
+  ]
+}

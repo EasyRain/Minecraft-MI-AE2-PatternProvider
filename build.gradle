@@ -78,6 +78,9 @@ dependencies {
     compileOnly files("libs/extended-industrialization-1.16.2-1.21.1.jar")
     compileOnly files("libs/tesseract-api-neoforge-1.12.16-1.21.1.jar")
     compileOnly files("libs/appliedenergistics2-19.2.17.jar")
+    // ExtendedAE 只在「扩展仓」路径上被引用（它的 ex_pattern_provider 菜单类型），仍属可选依赖：
+    // compileOnly = 仅编译期链接，产物里只有类名引用，不打包它的实现（它也是 LGPL-3.0）。
+    compileOnly files("libs/ExtendedAE-1.21-2.2.36-neoforge.jar")
 
     // Runtime for dev runClient (copied into run/mods).
     localRuntime files("libs/Modern-Industrialization-2.5.6.jar")

@@ -5,5 +5,8 @@
   "text.mi_ae2_pattern_provider.processing_array_suffix": " Processing Array Pattern Supply Hatch",
   "text.mi_ae2_pattern_provider.extended_hatch_name": "ME Extended Pattern Supply Hatch",
   "text.mi_ae2_pattern_provider.extended_processing_array_suffix": " Processing Array Extended Pattern Supply Hatch",
+  "item.mi_ae2_pattern_provider.advanced_overclock_module": "Advanced Overclock Module",
+  "item.mi_ae2_pattern_provider.advanced_overclock_module.desc1": "Insert into the overdrive module slot of any MI electric machine.",
+  "item.mi_ae2_pattern_provider.advanced_overclock_module.desc2": "Runs at maximum efficiency from the first tick and releases the recipe immediately - no recipe locking.",
   "mod.mi_ae2_pattern_provider": "MI AE2 Pattern Provider"
 }

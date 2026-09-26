@@ -8,7 +8,11 @@
     "ConfigurableItemStackMixin",
     "PatternProviderLogicInvoker",
     "ShapeMatcherMixin",
-    "ProcessingArrayBlockEntityAccessor"
+    "ProcessingArrayBlockEntityAccessor",
+    "EaepExtendedHostMixin",
+    "AppfluxEnergyTargetMixin",
+    "OverdriveComponentMixin",
+    "OverdriveSlotTypeMixin"
   ],
   "client": [
     "AEBaseScreenMixin"

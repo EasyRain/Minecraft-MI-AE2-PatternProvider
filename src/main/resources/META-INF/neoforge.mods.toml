@@ -6,6 +6,7 @@ license="${mod_license}"
 modId="${mod_id}"
 version="${mod_version}"
 displayName="${mod_name}"
+logoFile="logo.png"
 authors="${mod_authors}"
 description='''${mod_description}'''
 
@@ -39,3 +40,24 @@ config="${mod_id}.mixins.json"
     versionRange="[1.16.2,1.17)"
     ordering="AFTER"
     side="BOTH"
+
+# 可选：只有装了 ExtendedAE 才会注册「扩展样板供应仓」，其界面复用 ExtendedAE 的
+# ex_pattern_provider 菜单类型（代码里用 ModList.isLoaded("extendedae") 守护）。
+[[dependencies.${mod_id}]]
+    modId="extendedae"
+    type="optional"
+    versionRange="[1.21-2.2.21,1.22)"
+    ordering="AFTER"
+    side="BOTH"
+
+# 不兼容：MI-Efficiency-Remover 把「效率」全局硬改成始终满档（直接 mixin MI 的 CrafterComponent
+# 与 tesseract 的 AbstractModularCrafterComponent，并 cancel 掉 increase/decreaseEfficiencyTicks）。
+# 它的 cancel 无法被外部 mixin 撤销，因此没法「运行时柔性失效」，只能声明不兼容。
+# 本 mod 的「高级超频模块」提供的是同一效果的**按机器、按道具**版本，装上它再删掉那个 mod 即可。
+[[dependencies.${mod_id}]]
+    modId="miefficiencyremover"
+    type="incompatible"
+    versionRange="*"
+    ordering="NONE"
+    side="BOTH"
+    reason="MI-Efficiency-Remover 会把所有 MI 机器的效率全局锁成满档，与本 mod 「高级超频模块」的按机器启用方式冲突。请移除 MI-Efficiency-Remover —— 本 mod 的模块已提供同等效果。"
