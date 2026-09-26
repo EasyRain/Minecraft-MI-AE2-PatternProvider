@@ -1,5 +1,20 @@
 package com.miae2.ae;
 
+import appeng.api.stacks.AEFluidKey;
+import appeng.api.stacks.AEItemKey;
+import appeng.api.stacks.AEKey;
+import appeng.api.stacks.GenericStack;
+import aztech.modern_industrialization.inventory.ConfigurableFluidStack;
+import aztech.modern_industrialization.inventory.ConfigurableItemStack;
+import java.util.HashSet;
+import java.util.Set;
+import appeng.api.config.LockCraftingMode;
+import appeng.api.config.Settings;
+import appeng.api.config.YesNo;
+import appeng.helpers.patternprovider.UnlockCraftingEvent;
+import com.mojang.logging.LogUtils;
+import java.lang.reflect.Field;
+import org.slf4j.Logger;
 import appeng.api.crafting.IPatternDetails;
 import appeng.api.inventories.InternalInventory;
 import appeng.api.networking.IManagedGridNode;
@@ -58,7 +73,143 @@ public class MePatternProviderLogic extends PatternProviderLogic {
         if (this.getGrid() == null || !this.miae2$isAcceptablePattern(patternDetails)) {
             return false;
         }
-        return this.be.pushPattern(patternDetails, inputHolder);
+        // 原版「锁定合成模式」（LOCK_WHILE_LOW / LOCK_WHILE_HIGH / LOCK_UNTIL_PULSE / LOCK_UNTIL_RESULT）：
+        // AE2 基类就是在这一句上拦的。解锁侧不用我们管 —— 红石由基类 tick 的 updateRedstoneState() 处理，
+        // 「直到产物返回网络」由 PatternProviderReturnInventory 的回调处理（我们的产物正是经 returnInv 回网）。
+        if (this.getCraftingLockedReason() != LockCraftingMode.NONE) {
+            return false;
+        }
+        // 原版「阻挡模式」：本仓输入表里已经存有样板输入时就不再接收，等机器消耗完再发下一份。
+        // 判据对齐 AE2 基类那句 `!this.isBlocking() || !adapter.containsPatternInput(this.patternInputs)`
+        // —— 的"目标"在我们这里就是本仓自己的输入表。
+        if (this.isBlocking() && this.miae2$inputTableHasAnyPatternInput()) {
+            return false;
+        }
+        if (!this.be.pushPattern(patternDetails, inputHolder)) {
+            return false;
+        }
+        // 复刻 AE2 私有的 onPushPatternSuccess()：把解锁事件挂上。不这么做的话，
+        // LOCK_UNTIL_PULSE / LOCK_UNTIL_RESULT 永远不会进入"已锁定"状态
+        // （getCraftingLockedReason 只看 unlockEvent），等于这两个模式没用。
+        this.miae2$onPushPatternSuccess(patternDetails);
+        return true;
+    }
+
+    // ---------- 复刻 AE2 的私有钩子（我们覆写了 pushPattern，拿不到基类的 private 方法） ----------
+
+    private static final Logger LOGGER = LogUtils.getLogger();
+
+    private static Field aeUnlockEvent;
+    private static Field aeUnlockStack;
+    private static Field aeRedstoneState;
+    private static Method aeGetRedstoneState;
+    private static boolean aePrivateResolved;
+
+    private static void miae2$resolveAePrivate() {
+        if (aePrivateResolved) {
+            return;
+        }
+        aePrivateResolved = true;
+        try {
+            aeUnlockEvent = PatternProviderLogic.class.getDeclaredField("unlockEvent");
+            aeUnlockEvent.setAccessible(true);
+            aeUnlockStack = PatternProviderLogic.class.getDeclaredField("unlockStack");
+            aeUnlockStack.setAccessible(true);
+            aeRedstoneState = PatternProviderLogic.class.getDeclaredField("redstoneState");
+            aeRedstoneState.setAccessible(true);
+            aeGetRedstoneState = PatternProviderLogic.class.getDeclaredMethod("getRedstoneState");
+            aeGetRedstoneState.setAccessible(true);
+        } catch (Throwable t) {
+            LOGGER.warn("无法解析 AE2 PatternProviderLogic 的私有锁定状态，锁定合成模式将不可用", t);
+        }
+    }
+
+    /**
+     * 与 AE2 {@code PatternProviderLogic#onPushPatternSuccess} 逐行对应（原方法 private，只能自己来）：
+     *
+     * <pre>
+     * resetCraftingLock();
+     * switch (LOCK_CRAFTING_MODE) {
+     *   LOCK_UNTIL_PULSE  → unlockEvent = 有红石 ? REDSTONE_PULSE : REDSTONE_POWER；redstoneState = UNDECIDED
+     *   LOCK_UNTIL_RESULT → unlockEvent = RESULT；unlockStack = 样板主产物
+     * }
+     * </pre>
+     */
+    private void miae2$onPushPatternSuccess(IPatternDetails pattern) {
+        this.resetCraftingLock();
+        LockCraftingMode mode = this.getConfigManager().getSetting(Settings.LOCK_CRAFTING_MODE);
+        if (mode != LockCraftingMode.LOCK_UNTIL_PULSE && mode != LockCraftingMode.LOCK_UNTIL_RESULT) {
+            return;
+        }
+        miae2$resolveAePrivate();
+        try {
+            if (mode == LockCraftingMode.LOCK_UNTIL_PULSE) {
+                boolean powered = aeGetRedstoneState != null
+                        && Boolean.TRUE.equals(aeGetRedstoneState.invoke(this));
+                if (aeUnlockEvent != null) {
+                    aeUnlockEvent.set(this, powered
+                            ? UnlockCraftingEvent.REDSTONE_PULSE : UnlockCraftingEvent.REDSTONE_POWER);
+                }
+                if (aeRedstoneState != null) {
+                    aeRedstoneState.set(this, YesNo.UNDECIDED);
+                }
+            } else {
+                if (aeUnlockEvent != null) {
+                    aeUnlockEvent.set(this, UnlockCraftingEvent.RESULT);
+                }
+                if (aeUnlockStack != null) {
+                    aeUnlockStack.set(this, pattern.getPrimaryOutput());
+                }
+            }
+            this.saveChanges();
+        } catch (Throwable t) {
+            LOGGER.warn("挂载 AE2 锁定合成事件失败（模式 {}）", mode, t);
+        }
+    }
+
+    /**
+     * 原版阻挡模式的判据：本仓输入表里是否已经有本供应器**任一**样板的输入。
+     *
+     * <p>语义严格对齐 AE2 的 {@code PatternProviderTarget#containsPatternInput(patternInputs)} ——
+     * 它的入参 {@code this.patternInputs} 是"本供应器所有样板输入键的并集"，判定是"目标里是否存在其中
+     * 任意一个键"，即"这仓是不是正拿着料"。
+     *
+     * <p>⚠️ 这里刻意**只做原版语义**、不复刻 EAEP 的「智能阻挡」：EAEP 是用
+     * {@code @WrapOperation} 改写 AE2 <b>基类</b> {@code pushPattern} 里那句
+     * {@code containsPatternInput} 调用来实现"同配方不阻挡"的；而我们的 {@code pushPattern}
+     * 不调 {@code super}，那条 mixin 天然轮不到 —— 于是「原版阻挡可用、EAEP 智能阻挡被屏蔽」。
+     */
+    private boolean miae2$inputTableHasAnyPatternInput() {
+        Set<AEKey> patternInputs = new HashSet<>();
+        for (IPatternDetails details : this.getAvailablePatterns()) {
+            for (IPatternDetails.IInput input : details.getInputs()) {
+                for (GenericStack candidate : input.getPossibleInputs()) {
+                    patternInputs.add(candidate.what());
+                }
+            }
+        }
+        if (patternInputs.isEmpty()) {
+            return false;
+        }
+        for (ConfigurableItemStack stack : this.be.miae2$itemInputs()) {
+            if (stack.isEmpty()) {
+                continue;
+            }
+            AEKey key = AEItemKey.of(stack.getResource().getItem());
+            if (patternInputs.contains(key.dropSecondary())) {
+                return true;
+            }
+        }
+        for (ConfigurableFluidStack stack : this.be.miae2$fluidInputs()) {
+            if (stack.isEmpty()) {
+                continue;
+            }
+            AEKey key = AEFluidKey.of(stack.getResource().getFluid());
+            if (patternInputs.contains(key.dropSecondary())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

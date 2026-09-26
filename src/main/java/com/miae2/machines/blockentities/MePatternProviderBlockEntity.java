@@ -856,6 +856,16 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         list.addAll(this.itemInputs);
     }
 
+    /** 供 MePatternProviderLogic 实现原版阻挡模式的判据（本仓输入表里是否还存着料）。 */
+    public List<ConfigurableItemStack> miae2$itemInputs() {
+        return this.itemInputs;
+    }
+
+    /** 同上，流体侧。 */
+    public List<ConfigurableFluidStack> miae2$fluidInputs() {
+        return this.fluidInputs;
+    }
+
     @Override
     public void appendItemOutputs(List<ConfigurableItemStack> list) {
         list.addAll(this.itemOutputs);
