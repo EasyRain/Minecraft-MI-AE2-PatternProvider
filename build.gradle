@@ -63,6 +63,15 @@ repositories {
     flatDir {
         dir 'libs'
     }
+    // Jade / The One Probe 都只用于悬浮提示插件（MeProviderJadePlugin、MeProviderTopPlugin）。
+    // Jade 的许可是 CC-BY-NC-SA-4.0，不允许随仓库再分发，所以不放进 libs/，改从 Modrinth 的 Maven 取
+    // —— 只做编译期链接，产物里只有接口名引用（与 AE2 等可选依赖同理）。TOP 是 MIT，同样走 Maven 保持统一。
+    maven {
+        url = "https://api.modrinth.com/maven"
+        content {
+            includeGroup "maven.modrinth"
+        }
+    }
 }
 
 configurations {
@@ -78,6 +87,14 @@ dependencies {
     compileOnly files("libs/extended-industrialization-1.16.2-1.21.1.jar")
     compileOnly files("libs/tesseract-api-neoforge-1.12.16-1.21.1.jar")
     compileOnly files("libs/appliedenergistics2-19.2.17.jar")
+    // Jade：仅用于「设备在线 / 设备离线」悬浮提示的自有插件（MeProviderJadePlugin）。
+    // 属可选依赖：Jade 不在时它的注解扫描不存在，我们这个类永远不会被加载。
+    // 为什么不用 AE2 的 IGT 扩展点：见 MeProviderJadePlugin 的类注释（MI 所有机器共用 MachineBlock，
+    // AE2 的适配器会先强转 BE 再判断，导致对每一台 MI 机器都抛 ClassCastException）。
+    compileOnly "maven.modrinth:jade:15.10.6+neoforge"
+    // The One Probe（TOP）：仅用于「设备在线 / 设备离线」悬浮提示的自有插件（MeProviderTopPlugin）。
+    // MIT 许可无再分发顾虑，但同样只做编译期链接 —— TOP 不在时它的类永不被加载。
+    compileOnly "maven.modrinth:the-one-probe:1.21_neo-12.0.8"
     // ExtendedAE 只在「扩展仓」路径上被引用（它的 ex_pattern_provider 菜单类型），仍属可选依赖：
     // compileOnly = 仅编译期链接，产物里只有类名引用，不打包它的实现（它也是 LGPL-3.0）。
     compileOnly files("libs/ExtendedAE-1.21-2.2.36-neoforge.jar")
@@ -93,6 +110,9 @@ dependencies {
     localRuntime files("libs/ExtendedAE-1.21-2.2.36-neoforge.jar")
     // glodium 是 ExtendedAE 的前置库。
     localRuntime files("libs/Glodium-1.21-2.2-neoforge.jar")
+    // The One Probe：只为了在 dev / 冒烟环境里真实验证 MeProviderTopPlugin 的 IMC 注册路径
+    // （启动日志里应出现「[悬浮提示] The One Probe 插件已注册」）。同样走 Maven，不进仓库。
+    localRuntime "maven.modrinth:the-one-probe:1.21_neo-12.0.8"
 }
 
 // Copy the local dependency jars into run/mods before launching the dev client/server.

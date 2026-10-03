@@ -6,8 +6,14 @@
 
 - **四合一仓**：单个方块同时承担物品输入 / 物品输出 / 流体输入 / 流体输出四种接口，取代处理阵列原本的 4 种仓。
 - **AE2 样板供应器**：本身是 AE2 网格节点 + 样板供应器，可在其中放置合成样板；AE2 下单后，样板输入物（物品 + 流体）被注入自身仓库存 → 处理阵列拿去合成 → 成品写回自身仓库存 → 自动抽回 ME 网络。
-- **超堆叠**：槽容量直接到上限（`Integer.MAX_VALUE`），可接住 AE2 一次性推入的整份样板输入。
-- **自动命名**：样板管理终端里显示「<工作方块>处理阵列样板供应仓」。
+- **超堆叠**：**输入槽**容量直接到上限（`Integer.MAX_VALUE`），可接住 AE2 一次性推入的整份样板输入。
+  **输出槽保持普通容量（64）**——有意为之：处理阵列会按「输出槽还装得下多少」反推并行倍率，而 tesseract 的真插入
+  一格只装 64 且**会静默丢弃**超出的产物（详见 CHANGELOG「处理阵列单次产物超过 64 时被静默销毁」）；如实报 64
+  才能让「算得多少」与「装得多少」一致，大合成会分成多次合成完成，总耗电不变。
+  为了不因此损失输出效率，**输出格会按产物摊开锁满**（每个产物保底 1 格，剩下的格补给当前瓶颈产物）：
+   物品输出共 **3 排 = 27 格** ⇒ 倍率上限 `64 × 格数 / 单次产量`，一原材料出多种加工材料时也不会把格子全给同一种产物
+   （只给 1 排时上限会被卡在 `64 / 单次产量`）。
+- **自动命名（管理终端里）**：控制器里放了工作方块（EI 的处理阵列、**Industrialization Overdrive 的多方块处理阵列**，或任何实现 tesseract `ComponentStackHolder` 接口的阵列）→「<工作方块>处理阵列样板供应仓」；放在**普通多方块**里（电力高炉、蒸馏塔……）→「<控制器名>样板供应仓」；没成形时回落默认名。扩展仓对应位置带「扩展」。识别走**通用组件接口**（并确认那个组件里装的是真正的机器方块，不会把升级槽里的升级物品当成工作方块），所以不硬依赖 Overdrive 或其它阵列 mod（只依赖 MI + tesseract）。
 - **挖掘保留内容**：挖掘时样板、返回区物品、在途输出都会随方块掉落。
 - **扩展供应仓（ME 扩展样板供应仓）**：样板槽按 **4 页（144 个）**预留，默认解锁 1 页（36，4×9，对齐 ExtendedAE 的扩展样板供应器）；装 ExtendedAE-Plus 的**扩容卡**每张多解锁 1 页（最多 3 张 → 4 页）。
 - **升级卡**：自动继承「原版样板供应器能用的一切升级卡」。当前实测可用的有 ExtendedAE-Plus 的**频道卡**、AppliedFlux 的**感应卡**，以及（仅扩展仓）ExtendedAE-Plus 的**扩容卡**。设计上是**扫描**而非白名单——任何附加 mod 只要给原版供应器登记了升级卡，本 mod 就自动跟着支持，只有明确冲突的卡才单独剔除（目前是 ExtendedAE-Plus 的虚拟合成卡，其机制与本仓冲突）。
@@ -60,6 +66,7 @@
 | Applied Energistics 2 | 19.2.17 | required（硬依赖） |
 | Extended Industrialization | 1.16.2 | required（硬依赖，提供处理阵列） |
 | ExtendedAE | 1.21-2.2.21+ | optional（只在装了它时才注册「扩展样板供应仓」，其界面复用 ExtendedAE 的 ex_pattern_provider 菜单） |
+| Industrialization Overdrive | 1.14.0+ | optional（不是依赖；它的「多方块处理阵列」会被自动命名认出来，见上方「自动命名」） |
 
 > Modern Industrialization、Tesseract API、GuideME 由 AE2 / EI 传递引入（EI 硬依赖 MI + tesseract + guideme；AE2 硬依赖 guideme），无需单独声明。
 > ExtendedAE-Plus / AppliedFlux 不是依赖：装了它们，对应的升级卡才存在；没装则本 mod 照常工作，只是扩展仓回到 1 页样板、且没有那些卡可插。
@@ -72,7 +79,7 @@ JDK 21 + Gradle 8.14.3（依赖 jar 已放在 `libs/`，开箱即用）：
 gradlew build
 ```
 
-产物：`build/libs/mi_ae2_pattern_provider-1.1.0-1.21.1.jar`
+产物：`build/libs/mi_ae2_pattern_provider-1.1.1-1.21.1.jar`
 
 ## 许可证
 
@@ -80,7 +87,7 @@ gradlew build
 
 ### 与其它 mod 的集成（不含其代码）
 
-本 mod 可选地与几个 **LGPL-3.0** 授权的 mod 集成。**不打包、不分发它们的任何代码或 jar**（无 JarJar / shading / 源码复制），只做编译期链接与运行时 mixin 目标：
+本 mod 可选地与几个第三方 mod 集成。**不打包、不分发它们的任何代码或 jar**（无 JarJar / shading / 源码复制），只做编译期链接与运行时 mixin 目标：
 
 | mod | 许可证 | 集成方式 |
 |---|---|---|
@@ -88,17 +95,26 @@ gradlew build
 | [ExtendedAE](https://github.com/GlodBlock/ExtendedAE) | LGPL-3.0 | `compileOnly` 引用其 `ex_pattern_provider` 菜单类型（产物内只有类名引用）；扩展仓的界面与分页由它 + EAEP 提供 |
 | [ExtendedAE-Plus](https://github.com/GaLicn/ExtendedAE_Plus) | LGPL-3.0-or-later | 仅以 mixin 目标（字符串类名）适配其升级槽判定；本 mod 不含其代码，EAEP 缺席或改版时自动降级为「功能不可用但不崩」 |
 | AppliedFlux | LGPL-3.0 | 仅作为可选的升级槽提供方被使用 |
+| [Jade](https://modrinth.com/mod/jade) | CC-BY-NC-SA-4.0 | 悬浮提示插件（`compileOnly`，从 Modrinth Maven 取）。该许可**不允许再分发**，因此它的 jar 既不进产物、也不放进仓库的 `libs/`；未安装 Jade 时该插件不会被加载 |
+| [The One Probe](https://modrinth.com/mod/the-one-probe) | MIT | 悬浮提示插件（`compileOnly`，同样从 Modrinth Maven 取）。走 NeoForge 的 IMC 登记，未安装时该插件不会被加载 |
 
 各 mod 的版权归其各自作者所有。若你要二次分发本 mod，请一并遵守上述可选依赖的许可证。
 
 ### 悬浮提示：显示设备在线状态
 
-供应仓在 **Jade / WTHIT**（以及 AE2 自带的悬浮提示）里会显示一行「**设备在线** / **设备离线**」，与 AE2 自家机器
-（如 ME 接口）的表现一致。
+供应仓在 **Jade** 和 **The One Probe（TOP）** 里都会显示一行「**设备在线** / **设备离线**」，与 AE2 自家机器（如 ME 接口）的表现一致。
+两者是各自独立的小插件（互不影响，也不经过 AE2 自带的悬浮提示扩展点）：
 
-实现上走的是 AE2 的**公开扩展点**（`appeng.api.integrations.igtooltip.TooltipProvider` +
-`META-INF/services`），**不需要**编译期依赖 Jade，也没有自己写 Jade 插件 —— 因此 AE2 支持哪种悬浮提示，
-这个显示就跟着在哪种里出现。
+- **Jade**（`com.miae2.compat.MeProviderJadePlugin`，裸 `@WailaPlugin`）：服务端按**方块实体类型**同步一个布尔，
+  客户端按方块类加行、并**先判断这个方块实体是不是本 mod 的供应仓**，因此不会影响其它 MI 机器的悬浮提示。
+- **The One Probe**（`com.miae2.compat.MeProviderTopPlugin`）：走 NeoForge 的 IMC（`theoneprobe` + `getTheOneProbe`）
+  登记一个 `IProbeInfoProvider`；TOP 在服务端生成提示文本、再由它自己同步给客户端，所以直接读状态即可。
+
+两者都是**可选依赖**：没装对应 HUD 时那两个类不会被加载，mod 的其它功能不受任何影响。
+
+> 为什么不用 AE2 自带的悬浮提示扩展点（IGT）：它是一套同时覆盖 Jade / WTHIT / TOP 的公共抽象，一旦注册就在三个 HUD 里同时生效；
+> 而它 Jade 那条路是**按方块类注册**、且适配器**先把方块实体强转成目标类型再去判断** ——
+> MI 的所有机器共用同一个 `MachineBlock` 类，走那条路会让其它 MI 机器的悬浮提示报错。各写各的插件，行为完全可控。
 
 ### 使用约束：一个阵列只能放一个供应仓
 

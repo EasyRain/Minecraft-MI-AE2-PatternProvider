@@ -9,6 +9,7 @@ import appeng.api.networking.IGrid;
 import appeng.api.networking.IGridNode;
 import appeng.api.networking.IGridNodeListener;
 import appeng.api.networking.IManagedGridNode;
+import appeng.api.networking.crafting.ICraftingCPU;
 import appeng.api.networking.IInWorldGridNodeHost;
 import appeng.api.networking.security.IActionHost;
 import appeng.api.networking.security.IActionSource;
@@ -33,6 +34,8 @@ import aztech.modern_industrialization.inventory.ConfigurableItemStack;
 import aztech.modern_industrialization.inventory.MIInventory;
 import aztech.modern_industrialization.inventory.SlotPositions;
 import aztech.modern_industrialization.machines.BEP;
+import aztech.modern_industrialization.machines.MachineBlock;
+import aztech.modern_industrialization.machines.MachineBlockEntity;
 import aztech.modern_industrialization.machines.MachineComponent;
 import aztech.modern_industrialization.machines.components.OrientationComponent;
 import aztech.modern_industrialization.machines.gui.MachineGuiParameters;
@@ -41,14 +44,15 @@ import aztech.modern_industrialization.machines.multiblocks.HatchType;
 import com.miae2.ae.ExtendedAeMenuCompat;
 import com.miae2.ae.MePatternProviderLogic;
 import com.miae2.machines.init.ModHatches;
-import com.miae2.mixin.ProcessingArrayBlockEntityAccessor;
 import com.miae2.util.IControllerPosHolder;
 import com.miae2.util.IUnboundedItemAccessor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.EnumSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Supplier;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -63,13 +67,14 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.Nameable;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
-import net.swedz.extended_industrialization.machines.blockentity.multiblock.ProcessingArrayBlockEntity;
+import net.swedz.tesseract.neoforge.compat.mi.api.ComponentStackHolder;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
@@ -83,6 +88,19 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         implements IInWorldGridNodeHost, IGridNodeListener<MePatternProviderBlockEntity>, PatternProviderLogicHost, IActionHost, Nameable, IControllerPosHolder {
 
     private static final Logger LOGGER = LogUtils.getLogger();
+
+    /**
+     * 槽位区几何：第一行的 y（相对 GUI 左上角）与行距，与 MI 的 {@code SlotPositions} 一致。
+     *
+     * <p>四组槽位从上到下依次排：物品输入、流体输入、物品输出、流体输出。MI 的机器界面把玩家背包首行
+     * 放在 {@code backgroundHeight - 82}、背包标题放在 {@code backgroundHeight - 94}
+     * （见 {@code MachineGuiParameters.Builder#backgroundHeight} 与 {@code MachineScreen#inventoryLabelY}），
+     * 所以 GUI 高度必须 ≥ {@link #requiredGuiHeight}，否则最下面几行槽位会被背包盖住。
+     */
+    public static final int SLOT_FIRST_ROW_Y = 20;
+    public static final int SLOT_ROW_HEIGHT = 18;
+    /** 槽位区下方给背包标题与背包本体留的余量（见 {@link #requiredGuiHeight}）。 */
+    public static final int GUI_BOTTOM_MARGIN = 100;
 
     private final List<ConfigurableItemStack> itemInputs;
     private final List<ConfigurableItemStack> itemOutputs;
@@ -145,7 +163,7 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
             this.itemInputs.add(unboundedItemInputSlot());
         }
         for (int i = 0; i < itemOutSlots; i++) {
-            this.itemOutputs.add(unboundedItemOutputSlot());
+            this.itemOutputs.add(itemOutputSlot());
         }
         for (int i = 0; i < fluidInSlots; i++) {
             this.fluidInputs.add(ConfigurableFluidStack.standardInputSlot(fluidCapacity));
@@ -154,18 +172,26 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
             this.fluidOutputs.add(ConfigurableFluidStack.standardOutputSlot(fluidCapacity));
         }
 
+        // 槽位容量策略：输入槽无上限、输出槽普通容量 —— 原因见 miae2$enforceSlotCapacityPolicy()
+        this.miae2$enforceSlotCapacityPolicy();
+
         List<ConfigurableItemStack> allItems = new ArrayList<>(this.itemInputs);
         allItems.addAll(this.itemOutputs);
         List<ConfigurableFluidStack> allFluids = new ArrayList<>(this.fluidInputs);
         allFluids.addAll(this.fluidOutputs);
 
+        int itemInY = SLOT_FIRST_ROW_Y;
+        int fluidInY = itemInY + SLOT_ROW_HEIGHT * rowsOf(itemInSlots);
+        int itemOutY = fluidInY + SLOT_ROW_HEIGHT * rowsOf(fluidInSlots);
+        int fluidOutY = itemOutY + SLOT_ROW_HEIGHT * rowsOf(itemOutSlots);
+
         SlotPositions itemPositions = new SlotPositions.Builder()
-                .addSlots(8, 20, 9, rowsOf(itemInSlots))
-                .addSlots(8, 56, 9, rowsOf(itemOutSlots))
+                .addSlots(8, itemInY, 9, rowsOf(itemInSlots))
+                .addSlots(8, itemOutY, 9, rowsOf(itemOutSlots))
                 .build();
         SlotPositions fluidPositions = new SlotPositions.Builder()
-                .addSlots(8, 38, 9, rowsOf(fluidInSlots))
-                .addSlots(8, 74, 9, rowsOf(fluidOutSlots))
+                .addSlots(8, fluidInY, 9, rowsOf(fluidInSlots))
+                .addSlots(8, fluidOutY, 9, rowsOf(fluidOutSlots))
                 .build();
 
         this.inventory = new MIInventory(allItems, allFluids, itemPositions, fluidPositions);
@@ -237,6 +263,23 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         //    所以每次读档后都必须重新绑定，否则我们手里的又变成旧对象 → 阵列与 GUI 各看一套。
         this.miae2$rebindInventoryStacks();
 
+        // ⓪' 顺带把槽位容量策略再摁一遍：输入槽必须无上限、输出槽必须是普通容量。
+        //     我们的槽对象每次读档都由构造函数新建（策略在构造时已就位），这里是安全带 ——
+        //     一旦有任何路径让 MI 读档后的对象被采纳，输出槽就会带着旧存档的 `miae2$unbounded`
+        //     标记回来，那会让处理阵列算错并行倍率并静默销毁产物（见 miae2$enforceSlotCapacityPolicy）。
+        this.miae2$enforceSlotCapacityPolicy();
+
+        // ⓪'' 把「空着且没锁」的输出格补锁成空（AIR / 空流体）—— 这是 lockOutputs 一直在维持的不变量：
+        //      处理阵列靠 `areAllOutputSlotsLocked()` 消除配方歧义（**全锁住**时遇到第一个匹配配方就 break，
+        //      否则可能 matchesMultipleRecipes 直接放弃开工）。
+        //      为什么要在这里补：**槽数会变**。2026-10-04 物品输出从 1 排（9 格）扩到 3 排（27 格），
+        //      旧存档里只有前 9 格带着原来的锁，新增的 18 格是「空且未锁」——不管的话阵列会一直看到
+        //      「输出格没全锁」，直到下一次 pushPattern 才恢复正常。
+        //      ⚠️ 只锁**空且未锁**的格：已经锁着的（产品锁、或上次遗留的锁）一律不碰 —— 解锁会让在途产物
+        //      被当成「不该收」而静默销毁（根因③）。
+        this.lockAllEmpty(this.itemOutputs);
+        this.lockAllEmpty(this.fluidOutputs);
+
         // ① 把样板库存重建进 patterns 列表，并通知合成服务。没有这一步，读档后
         //    getAvailablePatterns() 是空的 —— 终端里看得见供应器与样板，但样板完全不参与合成。
         //    （手动把样板拿出来重插会触发 AE2 的库存变更回调，于是又「活」过来，正是这个原因。）
@@ -245,7 +288,7 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         LOGGER.debug("[读档初始化] 样板槽0={}，重建后 patterns={}",
                 slot0.isEmpty() ? "空" : slot0.getItem(), this.logic.getAvailablePatterns().size());
 
-        // ② 读档后**绝不能**去动输出格的玩家锁。
+        // ② 读档后**绝不能**去动输出格上已经存在的玩家锁（唯一例外见 ⓪''：给「空且未锁」的新格补锁）。
         //
         //    MI 的处理阵列靠 CrafterComponent#updateActiveRecipe 里的
         //    `boolean outputsLocked = this.areAllOutputSlotsLocked();` 来消除配方歧义：
@@ -527,7 +570,8 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
 
     @Override
     public PatternContainerGroup getTerminalGroup() {
-        // 终端里保留带工作方块名的完整命名：xxx处理阵列样板供应仓。
+        // 终端里保留带宿主名的完整命名：「电力高炉样板供应仓」「轧线机处理阵列样板供应仓」，
+        // 见 computeAutoName()。
         return new PatternContainerGroup(this.getTerminalIcon(), this.computeAutoName(), List.of());
     }
 
@@ -546,32 +590,91 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         return this.energyInputHatchPositions;
     }
 
-    /** 根据控制器（处理阵列）里放的工作方块自动命名（扩展版带「扩展」前缀）。 */
+    /** 根据宿主（控制器 / 阵列里的工作方块）自动命名（扩展版带「扩展」前缀）。 */
     private Component computeAutoName() {
-        ProcessingArrayBlockEntity controller = this.findController();
-        if (controller != null) {
-            ItemStack machines = ((ProcessingArrayBlockEntityAccessor) (Object) controller).getMachinesComponent().getMachines();
-            if (!machines.isEmpty()) {
-                Component workBlockName = machines.getHoverName();
-                if (machines.has(DataComponents.CUSTOM_NAME)) {
+        BlockEntity controller = this.findController();
+        if (controller instanceof MachineBlockEntity machine) {
+            ItemStack workBlock = findHostedWorkBlock(machine);
+            if (!workBlock.isEmpty()) {
+                // 阵列：用「工作方块名 + 处理阵列(扩展)样板供应仓」——与旧行为一致
+                Component workBlockName = workBlock.getHoverName();
+                if (workBlock.has(DataComponents.CUSTOM_NAME)) {
+                    // 玩家给工作方块改过名：直接用那个名字
                     return workBlockName;
                 }
                 return workBlockName.copy().append(Component.translatable(this.extended
                         ? "text.mi_ae2_pattern_provider.extended_processing_array_suffix"
                         : "text.mi_ae2_pattern_provider.processing_array_suffix"));
             }
+            // 普通多方块（电力高炉、蒸馏塔……）：用控制器自己的名字当宿主名。
+            // MachineBlockEntity#getDisplayName() = `block.<blockId>` 的翻译键，也就是玩家看到的方块名。
+            return machine.getDisplayName().copy().append(Component.translatable(this.extended
+                    ? "text.mi_ae2_pattern_provider.extended_multiblock_suffix"
+                    : "text.mi_ae2_pattern_provider.multiblock_suffix"));
         }
+        // 没接控制器 / 控制器不是 MI 机器（理论上不会出现）：回落默认名
         return Component.translatable(this.extended
                 ? "text.mi_ae2_pattern_provider.extended_hatch_name"
                 : "text.mi_ae2_pattern_provider.hatch_name");
     }
 
-    private ProcessingArrayBlockEntity findController() {
+    /** 多方块控制器（任何形态：普通多方块 / EI 处理阵列 / Overdrive 多方块处理阵列）。 */
+    @Nullable
+    private BlockEntity findController() {
         if (this.controllerPos == null || this.level == null) {
             return null;
         }
-        BlockEntity be = this.level.getBlockEntity(this.controllerPos);
-        return be instanceof ProcessingArrayBlockEntity pa ? pa : null;
+        return this.level.getBlockEntity(this.controllerPos);
+    }
+
+    /**
+     * 控制器里「正在运行的工作方块」；普通多方块（不跑工作方块）返回空。
+     *
+     * <p>靠 tesseract 的通用组件接口 {@link ComponentStackHolder} 探测，而不是 {@code instanceof}
+     * 某个 mod 的阵列类：EI 的 {@code ProcessingArrayMachineComponent} 与 Industrialization
+     * Overdrive 的 {@code MultiProcessingArrayMachineComponent} 都实现了它、且都注册在控制器的
+     * {@code components} 里，所以<b>两种阵列都能认出来，且本 mod 不需要依赖它们之中任何一个</b>。
+     *
+     * <p>⚠️ 但「实现了这个接口」不等于「是工作方块」：tesseract 用 accessor mixin
+     * （{@code net.swedz.tesseract.neoforge.compat.mi.mixin.accessor.UpgradeComponentAccessor} 等）
+     * 把这个接口也混进了 MI 的 {@code UpgradeComponent} / {@code RedstoneControlComponent} /
+     * {@code OverdriveComponent} / {@code CasingComponent}；而 tesseract 的多方块基类
+     * {@code AbstractElectricMultipliedCraftingMultiblockBlockEntity} 在构造时按
+     * {@code upgrades, redstoneControl, overdrive} 的顺序注册，<b>早于</b>阵列子类注册的
+     * {@code machines}，偏偏 {@code ComponentStorage#getNullable(Class)} 只返回
+     * 「按注册顺序第一个命中」——所以直接取它拿到的是<b>升级槽里的升级物品</b>，
+     * 曾经把供应器命名成「中级升级处理阵列…样板供应仓」。这里改成遍历所有候选、只认机器方块物品。
+     */
+    @NotNull
+    public static ItemStack findHostedWorkBlock(MachineBlockEntity controller) {
+        List<ItemStack> candidates = new ArrayList<>();
+        for (ComponentStackHolder holder : controller.components.getAll(ComponentStackHolder.class)) {
+            candidates.add(holder.getStack());
+        }
+        return pickHostedWorkBlock(candidates);
+    }
+
+    /**
+     * 从控制器的若干候选物品里挑出真正的工作方块（纯函数，方便自检直接喂数据）。
+     *
+     * <p>判据是「MI 的机器方块物品」：升级 / 红石模块 / 超频模块都是普通物品，外壳方块也不是
+     * {@code MachineBlock}，全部被排除。一个都不匹配时返回空 —— 宁可回落到「普通多方块」分支
+     * 显示控制器名，也不拿升级物品的名字去糊一个假阵列名。
+     */
+    @NotNull
+    public static ItemStack pickHostedWorkBlock(List<ItemStack> candidates) {
+        for (ItemStack stack : candidates) {
+            if (isMachineBlockItem(stack)) {
+                return stack;
+            }
+        }
+        return ItemStack.EMPTY;
+    }
+
+    /** 是不是 MI 的机器方块物品（阵列能装的那种「工作方块」）。 */
+    private static boolean isMachineBlockItem(ItemStack stack) {
+        return !stack.isEmpty() && stack.getItem() instanceof BlockItem blockItem
+                && blockItem.getBlock() instanceof MachineBlock;
     }
 
     // ---------- 样板 push/pull ----------
@@ -719,20 +822,109 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         }
     }
 
-    /** 把输出格锁定为样板的产物、没用到的格锁为空（让处理阵列走确定性配方匹配）。 */
+    /**
+     * 把输出格锁定为样板的产物、没用到的格锁为空（让处理阵列走确定性配方匹配）。
+     *
+     * <p><b>物品产物会「摊开」占满全部物品输出格</b>（当前 3 排 = 27 格），而不是只锁刚好装得下的那一格：
+     * 处理阵列（tesseract 的
+     * {@code MultipliedCrafterComponent#calculateItemOutputRecipeMultiplier}）是按「输出格一共还能装多少」
+     * 二分反推并行倍率的，而它<b>真</b>插入时一格最多放 {@code ItemVariant.getMaxStackSize()} = 64
+     * （{@code CrafterComponentHelper#putItemOutputs} 真插入分支用 {@code variant.getMaxStackSize() - amount}，
+     * 与模拟分支的 {@code getRemainingCapacityFor()} 在普通容量下等价）。只锁一格 ⇒ 倍率被卡在
+     * {@code 64 / 单次产量}；锁 N 格 ⇒ 上限抬到 {@code 64 * N / 单次产量}，而且模拟与真插入完全一致、不会丢产物。
+     *
+     * <p>流体不摊开：流体输出那一侧的倍率本来就是「对<b>所有</b>能装该流体的格子取最小」
+     * （{@code calculateFluidOutputRecipeMultiplier} 里 {@code multiplier = min(...)}），而模拟与真插入用的
+     * 都是同一个 {@code getRemainingSpace()} ⇒ 多锁几格既不会抬高上限（上限是单格容量），还可能被某个
+     * 已经装了半格的槽拖低，所以一种流体只锁它需要的那一格。
+     */
     public void lockOutputs(IPatternDetails patternDetails) {
         this.unlockAllOutputs();
+        this.miae2$lockItemOutputsSpread(patternDetails);
 
         for (GenericStack output : patternDetails.getOutputs()) {
-            if (output.what() instanceof AEItemKey itemKey) {
-                AbstractConfigurableStack.playerLockNoOverride(itemKey.getItem(), output.amount(), this.itemOutputs);
-            } else if (output.what() instanceof AEFluidKey fluidKey) {
+            if (output.what() instanceof AEFluidKey fluidKey) {
                 AbstractConfigurableStack.playerLockNoOverride(fluidKey.getFluid(), output.amount(), this.fluidOutputs);
             }
         }
 
         this.lockAllEmpty(this.itemOutputs);
         this.lockAllEmpty(this.fluidOutputs);
+    }
+
+    /**
+     * 把物品产物摊到所有物品输出格上：每个产物保底占 1 格，剩下的格每次补给
+     * <b>当前倍率上限最低</b>的那个产物（上限 = {@code 64 * 格数 / 单次产量}），把瓶颈抬平 ——
+     * 一原材料出多种加工材料时，不会把所有格全给同一种产物。
+     */
+    private void miae2$lockItemOutputsSpread(IPatternDetails patternDetails) {
+        Map<Item, Long> products = new LinkedHashMap<>();
+        for (GenericStack output : patternDetails.getOutputs()) {
+            if (output.what() instanceof AEItemKey itemKey) {
+                products.merge(itemKey.getItem(), Math.max(1L, output.amount()), Long::sum);
+            }
+        }
+        if (products.isEmpty()) {
+            return;
+        }
+
+        List<Item> items = new ArrayList<>(products.keySet());
+        long[] amounts = new long[items.size()];
+        for (int i = 0; i < amounts.length; i++) {
+            amounts[i] = products.get(items.get(i));
+        }
+        int[] quota = spreadOutputQuotas(amounts, this.itemOutputs.size());
+
+        for (int i = 0; i < quota.length; i++) {
+            for (int n = 0; n < quota[i]; n++) {
+                // requiredAmount 传 1：每调一次就恰好再锁一格（已经锁上的格不会再被选中），
+                // 于是一种产物能占住多格，倍率上限随格数线性抬高。
+                AbstractConfigurableStack.playerLockNoOverride(items.get(i), 1L, this.itemOutputs);
+            }
+        }
+    }
+
+    /**
+     * 把 {@code slots} 个输出格分配给若干产物：每个产物保底 1 格，剩下的格每次补给
+     * <b>当前倍率上限最低</b>的那个产物（单产物上限 = {@code 64 * 格数 / 单次产量}）。
+     *
+     * <p>这个「往最低处加水」的贪心会把各产物的上限抬平，最终格数近似<b>正比于单次产量</b>：
+     * 单次产量 {@code 2 / 4 / 8}、27 格 ⇒ 约 {@code 4 / 8 / 15} 格，<b>不会</b>退化成
+     * 「每个产物 1 格、剩下的全给某一个」。阵列的可行倍率是
+     * {@code min_i(64 * 格数_i / 产量_i)}，所以按产量成比例分配恰是这个 max-min 目标的最优解。
+     *
+     * @param amountsByProduct 各产物的单次产量（须都 &gt; 0）
+     * @param slots            可用的输出格数
+     * @return 与入参同序的格数分配；总和为 {@code min(slots, …)}~{@code slots}
+     *         （产物种类数 &gt; slots 时，多出来的产物分不到格）
+     */
+    public static int[] spreadOutputQuotas(long[] amountsByProduct, int slots) {
+        int count = amountsByProduct.length;
+        int[] quota = new int[count];
+        int assigned = 0;
+        for (int i = 0; i < count && assigned < slots; i++, assigned++) {
+            quota[i] = 1;
+        }
+        while (assigned < slots) {
+            int best = -1;
+            double lowestCeiling = Double.MAX_VALUE;
+            for (int i = 0; i < count; i++) {
+                if (quota[i] == 0) {
+                    continue;
+                }
+                double ceiling = 64.0D * quota[i] / amountsByProduct[i];
+                if (ceiling < lowestCeiling) {
+                    lowestCeiling = ceiling;
+                    best = i;
+                }
+            }
+            if (best < 0) {
+                break;
+            }
+            quota[best]++;
+            assigned++;
+        }
+        return quota;
     }
 
     private void unlockAllOutputs() {
@@ -792,24 +984,99 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         }
     }
 
-    /** push 入口（供 MePatternProviderLogic 调用）：同一样板累计发配，不同样板排队。 */
+    /**
+     * push 入口（供 MePatternProviderLogic 调用）：同一样板累计发配，<b>空闲时换样板</b>。
+     *
+     * <p>换样板只在「上一份真的做完」时放行 —— 三个条件任一不满足就先拒收（AE 下一 tick 会再试）：
+     * <ul>
+     *   <li>{@code isAnyCraftInFlight()}：阵列正握着这一份（输出格有机器锁）。这时候改锁，在途的那批产物
+     *       会因为新锁不认它而被 {@code putItemOutputs} 静默销毁（见 {@code CHANGELOG} 里丢产物的那一版）；</li>
+     *   <li>{@code hasAnyInput()}：仓里还压着上一份的材料，先让阵列吃完（也避免"锁着 A 却来了 B 的产物"）；</li>
+     *   <li>{@code hasAnyOutput()}：产物还没搬回网络。现在重新上锁会跳过"有内容"的格 → 搬空后留下一堆
+     *       <b>没锁的空输出格</b>，阵列的确定性配方匹配（{@code areAllOutputSlotsLocked}）就断了。</li>
+     * </ul>
+     *
+     * <p>⚠️ 不能像以前那样"只要不是当前样板就拒收"：AE 的 CPU 做完第一步会<b>立刻</b>推下一步的样板，
+     * 而那时本供应器还挂着上一步的 {@code activePattern}（清理要等"网格上一个忙的 CPU 都没有"，大合成中途
+     * 永远不会满足）⇒ 第二份料永远推不进来，任务卡死在「输出格还锁着上一步的产物、输入格是空的」。<b>用户报的
+     * 「单机器连续配方卡住」就是这个。</b>
+     */
     public boolean pushPattern(IPatternDetails patternDetails, KeyCounter[] inputHolder) {
         // 没被任何多方块匹配上就不收料：可能是还没成形，也可能是「同一阵列放了多个供应仓 → 结构被判无效」。
         // 否则 AE 会把材料灌进一个永远不会被消耗的仓里，任务就一直挂着。
         if (!this.isMatched()) {
             return false;
         }
-        if (this.activePattern != null && this.activePattern != patternDetails) {
+        if (this.activePattern != null && this.activePattern != patternDetails
+                && (this.miae2$isAnyCraftInFlight() || this.miae2$hasAnyInput() || this.miae2$hasAnyOutput())) {
             return false;
         }
         if (!this.insertPatternInputs(inputHolder, IActionSource.ofMachine(this))) {
             return false;
         }
-        if (this.activePattern == null) {
+        if (this.activePattern != patternDetails) {
+            // 首推或换样板：按新样板重新摊开输出格锁
             this.activePattern = patternDetails;
             this.lockOutputs(patternDetails);
+            LOGGER.info("[样板切换] 输出格已按新样板重新上锁：{} @ {}", patternDetails.getOutputs(), this.getBlockPos());
         }
         return true;
+    }
+
+    /** 输入槽（物品或流体）里还压着材料 —— 上一份还没被阵列吃完。 */
+    private boolean miae2$hasAnyInput() {
+        for (ConfigurableItemStack stack : this.itemInputs) {
+            if (!stack.isEmpty()) {
+                return true;
+            }
+        }
+        for (ConfigurableFluidStack stack : this.fluidInputs) {
+            if (!stack.isEmpty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 输出槽里还有没搬回网络的产物。 */
+    private boolean miae2$hasAnyOutput() {
+        for (ConfigurableItemStack stack : this.itemOutputs) {
+            if (!stack.isEmpty()) {
+                return true;
+            }
+        }
+        for (ConfigurableFluidStack stack : this.fluidOutputs) {
+            if (!stack.isEmpty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 处理阵列是否正握着这一份（输出格上有<b>机器锁</b>）。
+     *
+     * <p>机器锁的生命周期（MI 的 {@code CrafterComponent} 与 tesseract 的
+     * {@code AbstractModularCrafterComponent} 一致）：
+     * 配方真的开工时 {@code tryStartRecipe} → {@code putOutputs(recipe, true, true)} 上锁；
+     * 每 tick 只跑 {@code tickRecipe()}；配方完成时 {@code putOutputs(recipe, false, false)} +
+     * {@code clearLocks()}（只清机器锁，玩家锁保留）。
+     * 唯一会"空转上锁"的是结构重新匹配后的 {@code tryContinueRecipe()}（EI 的
+     * {@code AbstractMultipliedCraftingMultiblockBlockEntity#tick} 只在 {@code TRYING_TO_RESUME} 状态调一次），
+     * 那正是读档时确实有在途配方的情况，算在途是对的。
+     */
+    private boolean miae2$isAnyCraftInFlight() {
+        for (ConfigurableItemStack stack : this.itemOutputs) {
+            if (stack.isMachineLocked()) {
+                return true;
+            }
+        }
+        for (ConfigurableFluidStack stack : this.fluidOutputs) {
+            if (stack.isMachineLocked()) {
+                return true;
+            }
+        }
+        return false;
     }
 
 
@@ -819,6 +1086,18 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
      * <p>判据只看「**ME 网络是否还在请求本样板的产物**」，<b>不再</b>看输出槽的机器锁：
      * 机器锁（{@code isMachineLocked()}）可能一直挂着，会让清理条件永远为假 ——
      * 表现就是用户报的「合成中途取消后材料不回收、格子锁也不重置」。
+     *
+     * <p><b>⚠️ 还必须额外要求「网格上没有任何 CPU 在跑任务」</b>，否则会在**大合成中途误清**：
+     * {@code ICraftingService.getRequestedAmount()}（{@code CraftingService.java:388}）返回的其实是
+     * {@code job.waitingFor} —— 「已经推出去、还等着返回的**产物**」，而**不是**「这个任务还需不需要继续做」。
+     * 机器在两次发配之间（上一批产物已回网、下一批材料还没推）它天然就是 0，40 tick 去抖挡不住。
+     * 一旦误清：还在输入表里的材料被退回**通用网络存储**，而 AE 的 CPU 存储只收 {@code waitingFor} 里的键
+     * （{@code CraftingCpuLogic.insert} 里 {@code waitingFor.extract(...) <= 0} 直接 return 0）—— 退回去
+     * 的料 CPU 再也拿不回来；同时 {@code unlockAllOutputs()} 解掉输出格锁，阵列也不再走确定性配方匹配。
+     * 症状就是「大合成做到一半（例如刚好一组的量）永久卡住、供应器空的、机器不动、材料明明够」。
+     *
+     * <p>「有没有活在跑」的正确判据是 {@code ICraftingCPU.isBusy()}（{@code CraftingCPUCluster.java:180}
+     * → {@code craftingLogic.hasJob()}）—— 它只看任务在不在，与 waitingFor 无关。
      *
      * <p>连续 {@link #IDLE_CLEANUP_TICKS} tick 没有请求才动手，是为了避开两次 push 之间的瞬时空隙；
      * 也正因为有"还有请求就不动"这层门，读档时（AE 的任务还在排队）不会误清 —— 而上一版无条件解锁
@@ -835,6 +1114,11 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
             this.idleTicks = 0; // 还有任务（含读档后恢复的任务），什么都不做
             return;
         }
+        // 网格上还有 CPU 在跑任务（哪怕当前没有产物在途）→ 任务一定还没结束，绝不能回收/解锁。
+        if (this.miae2$isAnyCpuBusy()) {
+            this.idleTicks = 0;
+            return;
+        }
         if (++this.idleTicks < IDLE_CLEANUP_TICKS) {
             return;
         }
@@ -844,6 +1128,27 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         this.unlockAllOutputs();
         this.setChanged();
         this.sync(); // 让 GUI/Jade 立刻反映回收结果
+        LOGGER.info("[任务回收] 网格上已无进行中的合成任务，回收本仓残留输入并解锁输出格 @ {}", this.getBlockPos());
+    }
+
+    /**
+     * 网格上是否有任意一台合成 CPU 正握着任务。
+     *
+     * <p>用 {@code ICraftingCPU.isBusy()}（{@code craftingLogic.hasJob()}）而不是
+     * {@code getRequestedAmount()}/{@code isRequesting()}：后两者都建立在 {@code job.waitingFor} 上，
+     * 只在"有产物在途"时才为真，机器两次发配之间会假性归零（见 {@link #updateActivePattern()} 的说明）。
+     */
+    private boolean miae2$isAnyCpuBusy() {
+        IGrid grid = this.logic.getGrid();
+        if (grid == null) {
+            return false;
+        }
+        for (ICraftingCPU cpu : grid.getCraftingService().getCpus()) {
+            if (cpu.isBusy()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 本供应器上任意一张样板的产物是否仍被 ME 网络请求（读档后 activePattern 为空时用）。 */
@@ -937,16 +1242,74 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         return Math.max(1, (slots + 8) / 9);
     }
 
+    /**
+     * 四组槽位按行数算出的<b>最低 GUI 高度</b>，{@code ModHatches} 用它设 {@code backgroundHeight}。
+     *
+     * <p>做成公式而不是写死常数：写死 190 正好只够 4 行（1+1+1+1）。把物品输出加成 3 排后共 6 行，
+     * 若不同步加高 GUI，最下面两行槽位会被玩家背包压住/画到界面外 —— 那种问题不会有任何报错，
+     * 只会表现为「格子看不见」。
+     */
+    public static int requiredGuiHeight(int itemInSlots, int itemOutSlots, int fluidInSlots, int fluidOutSlots) {
+        int rows = rowsOf(itemInSlots) + rowsOf(itemOutSlots) + rowsOf(fluidInSlots) + rowsOf(fluidOutSlots);
+        return SLOT_FIRST_ROW_Y + SLOT_ROW_HEIGHT * rows + GUI_BOTTOM_MARGIN;
+    }
+
+    /** 输入槽：容量无上限（AE 会一次性把整批料推进来，见 {@link #insertPatternInputs}）。 */
     private static ConfigurableItemStack unboundedItemInputSlot() {
         ConfigurableItemStack stack = ConfigurableItemStack.standardInputSlot();
         ((IUnboundedItemAccessor) stack).miae2$setUnbounded(true);
         return stack;
     }
 
-    private static ConfigurableItemStack unboundedItemOutputSlot() {
-        ConfigurableItemStack stack = ConfigurableItemStack.standardOutputSlot();
-        ((IUnboundedItemAccessor) stack).miae2$setUnbounded(true);
-        return stack;
+    /** 输出槽：<b>普通容量（64）</b>，绝不能设成无上限 —— 原因见 {@link #miae2$enforceSlotCapacityPolicy()}。 */
+    private static ConfigurableItemStack itemOutputSlot() {
+        return ConfigurableItemStack.standardOutputSlot();
+    }
+
+    /**
+     * 强制槽位容量策略：<b>输入槽无上限、输出槽普通容量</b>。幂等，构造时与读档初始化时各调一次。
+     *
+     * <p><b>为什么输出槽绝不能无上限</b>（2026-10-04 修的真实 bug：大型合成永远卡在中途）：
+     * <ol>
+     *   <li>EI 的处理阵列会按「输出槽还装得下多少」反推**并行倍率**：
+     *       {@code MultipliedCrafterComponent.calculateItemOutputRecipeMultiplier(...)} 用
+     *       {@code canItemOutputsAllFit(recipe, multiplier)} 去模拟插入
+     *       {@code output.amount() * multiplier} 个产物，落到
+     *       {@code MIStorage.insert} → {@code stack.getRemainingCapacityFor(resource)}。
+     *       我们的无上限槽让它永远返回「装得下」⇒ 倍率被一路抬到
+     *       {@code min(可用输入数, 阵列机器数)}（原本会被输出空间卡住）。</li>
+     *   <li>而**真插入**是 tesseract 的 {@code CrafterComponentHelper.putItemOutputs(...)}：真实路径下它算的是
+     *       {@code output.variant().getMaxStackSize() - stack.getAmount()}（一格最多 64），
+     *       **不是**容量感知的 {@code getRemainingCapacityFor}。我们其余输出格又被
+     *       {@code lockAllEmpty} 玩家锁成 {@code Items.AIR}（{@code isValid} 对任何真实物品都是 false）⇒
+     *       一次合成最多塞进 64 个产物。</li>
+     *   <li>超出的部分只把返回值置 false，而调用方 {@code AbstractModularCrafterComponent.tickRecipe()}
+     *       里是 {@code this.putOutputs(this.activeRecipe, false, false);} —— <b>根本不看返回值</b> ⇒
+     *       <b>产物被静默销毁</b>。AE 的 CPU 于是永远等不到足量产（{@code waitingFor} 凑不齐），
+     *       任务永久挂起；本仓因为「CPU 还在请求」而不清理 ⇒ {@code activePattern} 一直挂着、
+     *       <b>输出格保持玩家锁、输入格已空、机器无料可做</b>（正是用户用扳手右击看到的那个状态）。</li>
+     * </ol>
+     * <p>改回普通容量后，EI 的倍率上限（≤ 64 / 每样板产物）与它自己的真插入上限完全一致，
+     * 结构上不可能再销毁产物。输入槽必须保持无上限：{@link #insertPatternInputs} 要求「完整接纳，
+     * 否则整体拒绝」，有上限会让大合成根本推不进来。
+     *
+     * <p>本方法是幂等的：构造时调一次保证新槽正确；读档初始化时再调一次作为安全带
+     * （我们的槽对象每次读档都由构造函数新建、不会带着旧容量，但万一将来有哪条路径让 MI 读档后
+     * 那批对象被采纳，这里会立刻纠正，而不是等玩家再撞一次「合成卡死」）。
+     */
+    private void miae2$enforceSlotCapacityPolicy() {
+        for (ConfigurableItemStack stack : this.itemInputs) {
+            ((IUnboundedItemAccessor) stack).miae2$setUnbounded(true);
+        }
+        for (ConfigurableItemStack stack : this.itemOutputs) {
+            IUnboundedItemAccessor accessor = (IUnboundedItemAccessor) stack;
+            if (accessor.miae2$isUnbounded()) {
+                accessor.miae2$setUnbounded(false);
+                LOGGER.warn("[槽位策略] 输出槽被纠正回普通容量 @ {} —— 它被标成了无上限，"
+                        + "会让处理阵列算错并行倍率并静默销毁产物",
+                        this.hasLevel() ? this.getBlockPos() : null);
+            }
+        }
     }
 
     /** 把 PatternProviderLogic 的 NBT 读写挂到 MI 的组件系统上（saveAdditional/loadAdditional 是 final）。 */

@@ -3,6 +3,7 @@ package com.miae2;
 import appeng.api.AECapabilities;
 import appeng.api.networking.IInWorldGridNodeHost;
 import com.miae2.ae.MePatternProviderUpgrades;
+import com.miae2.compat.MeProviderTopPlugin;
 import com.miae2.items.ModItems;
 import com.miae2.machines.blockentities.MePatternProviderBlockEntity;
 import com.miae2.machines.init.ModHatches;
@@ -14,8 +15,11 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.InterModComms;
+import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLLoadCompleteEvent;
+import net.neoforged.fml.event.lifecycle.InterModEnqueueEvent;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.neoforge.capabilities.RegisterCapabilitiesEvent;
 import net.neoforged.neoforge.common.NeoForge;
@@ -40,6 +44,8 @@ public class MiAe2PatternProvider {
         // 升级支持登记放在加载最末尾：其它 mod 都在 FMLCommonSetupEvent 里登记升级卡，
         // 而 NeoForge 保证 FMLLoadCompleteEvent 在其之后派发，此时才能扫全。
         modEventBus.addListener(MiAe2PatternProvider::onLoadComplete);
+        // 可选集成：把「设备在线 / 设备离线」交给 The One Probe（TOP 用 IMC 登记，见 MeProviderTopPlugin）。
+        modEventBus.addListener(MiAe2PatternProvider::onInterModEnqueue);
         // 冒烟测试自动收尾：仅在 -Dmi_ae2_pattern_provider.smokeTest=<tick> 时生效（平时惰性）。
         SmokeTestAutoStop.init();
         if (SmokeTestAutoStop.isEnabled() && !FMLEnvironment.dist.isClient()) {
@@ -52,6 +58,20 @@ public class MiAe2PatternProvider {
     /** 扫描「原版样板供应器能用的升级卡」并嫁接到本 mod 的供应仓上（enqueueWork 保证在主线程执行）。 */
     private static void onLoadComplete(FMLLoadCompleteEvent event) {
         event.enqueueWork(MePatternProviderUpgrades::register);
+    }
+
+    /**
+     * 可选集成：给 The One Probe 登记悬浮提示 provider。
+     *
+     * <p>TOP 没有注解扫描，只能走 IMC（{@code "theoneprobe" + "getTheOneProbe"}，载荷是一个接收
+     * {@code ITheOneProbe} 的 {@code Function}）。{@code ModList.isLoaded} 判断必须包在外面：
+     * 方法引用 {@code MeProviderTopPlugin::new} 只有在 TOP 存在时才会被求值，TOP 缺席时那个类
+     * （以及它对 {@code mcjty.theoneprobe} 的引用）根本不会被加载。
+     */
+    private static void onInterModEnqueue(InterModEnqueueEvent event) {
+        if (ModList.get().isLoaded("theoneprobe")) {
+            InterModComms.sendTo("theoneprobe", "getTheOneProbe", MeProviderTopPlugin::new);
+        }
     }
 
     /** 手持 ExtendedAE 的「样板供应器升级」+ shift 右键：把普通供应仓原位升级为扩展供应仓。 */

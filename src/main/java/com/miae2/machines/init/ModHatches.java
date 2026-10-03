@@ -31,7 +31,15 @@ public final class ModHatches {
     );
 
     public static final int ITEM_INPUT_SLOTS = 9;
-    public static final int ITEM_OUTPUT_SLOTS = 9;
+    /**
+     * 物品输出槽：<b>3 排 = 27 格</b>（2026-10-04 从 1 排扩到 3 排）。
+     *
+     * <p>为什么不能只有 1 排：EI 的处理阵列按「输出格一共还装得下多少」反推并行倍率，而它<b>真</b>插入时
+     * 一格最多 {@code ItemVariant.getMaxStackSize()} = 64（见 {@code MePatternProviderBlockEntity#lockOutputs}）。
+     * 1 排（9 格）时一个产物最多锁 1~9 格 ⇒ 倍率上限 {@code 64 * 格数 / 单次产量}；3 排后上限变成
+     * {@code 64 * 27 / 单次产量}，同时给产物留出 27×64 的缓冲。
+     */
+    public static final int ITEM_OUTPUT_SLOTS = 9 * 3;
     public static final int FLUID_INPUT_SLOTS = 9;
     public static final int FLUID_OUTPUT_SLOTS = 9;
     // 超堆叠直接到上限（单等级、无升级）
@@ -65,7 +73,7 @@ public final class ModHatches {
                 "me_pattern_provider_hatch",
                 bet -> new MePatternProviderBlockEntity(
                         bet,
-                        new MachineGuiParameters.Builder("me_pattern_provider_hatch", true).backgroundHeight(190).build(),
+                        guiParams("me_pattern_provider_hatch"),
                         ITEM_INPUT_SLOTS, ITEM_OUTPUT_SLOTS, FLUID_INPUT_SLOTS, FLUID_OUTPUT_SLOTS, FLUID_CAPACITY,
                         ME_PATTERN_PROVIDER, 9, false,
                         () -> ME_PATTERN_PROVIDER_BLOCK.blockDefinition().asItem()
@@ -81,7 +89,7 @@ public final class ModHatches {
                     "me_extended_pattern_provider_hatch",
                     bet -> new MePatternProviderBlockEntity(
                             bet,
-                            new MachineGuiParameters.Builder("me_extended_pattern_provider_hatch", true).backgroundHeight(190).build(),
+                            guiParams("me_extended_pattern_provider_hatch"),
                             ITEM_INPUT_SLOTS, ITEM_OUTPUT_SLOTS, FLUID_INPUT_SLOTS, FLUID_OUTPUT_SLOTS, FLUID_CAPACITY,
                             ME_EXTENDED_PATTERN_PROVIDER, EXTENDED_PATTERN_SLOTS, true,
                             () -> ME_EXTENDED_PATTERN_PROVIDER_BLOCK.blockDefinition().asItem()
@@ -90,5 +98,18 @@ public final class ModHatches {
                     MachineBlockEntity::registerFluidApi
             );
         }
+    }
+
+    /**
+     * GUI 参数：高度按槽位行数<b>算出来</b>（{@link MePatternProviderBlockEntity#requiredGuiHeight}）。
+     *
+     * <p>以前这里写死 {@code backgroundHeight(190)}，正好只够 1+1+1+1 四行；物品输出加到 3 排（共 6 行）后
+     * 若不同步加高，最下面两行槽位会被玩家背包压住（不会有任何报错，只表现为「格子看不见」）。
+     */
+    private static MachineGuiParameters guiParams(String blockId) {
+        return new MachineGuiParameters.Builder(blockId, true)
+                .backgroundHeight(MePatternProviderBlockEntity.requiredGuiHeight(
+                        ITEM_INPUT_SLOTS, ITEM_OUTPUT_SLOTS, FLUID_INPUT_SLOTS, FLUID_OUTPUT_SLOTS))
+                .build();
     }
 }
