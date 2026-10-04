@@ -98,6 +98,11 @@ dependencies {
     // ExtendedAE 只在「扩展仓」路径上被引用（它的 ex_pattern_provider 菜单类型），仍属可选依赖：
     // compileOnly = 仅编译期链接，产物里只有类名引用，不打包它的实现（它也是 LGPL-3.0）。
     compileOnly files("libs/ExtendedAE-1.21-2.2.36-neoforge.jar")
+    // Cloth Config：可选的「游戏内配置界面」（MiAe2ConfigScreen 实现 NeoForge 的 IConfigScreenFactory）。
+    // 它和 AE2 同样是 LGPL-3.0，而 libs/ 里已经躺着同样许可的 AE2 ⇒ 放进 libs/ 符合本仓库既有惯例
+    // （Jade 走 Maven 是因为 CC-BY-NC-SA 不允许再分发，Cloth Config 没有这个问题）。
+    // 只做编译期链接 + dev 运行时：产物里只有接口名引用，没装它的玩家一切照旧。
+    compileOnly files("libs/cloth-config-15.0.140-neoforge.jar")
 
     // Runtime for dev runClient (copied into run/mods).
     localRuntime files("libs/Modern-Industrialization-2.5.6.jar")
@@ -110,6 +115,8 @@ dependencies {
     localRuntime files("libs/ExtendedAE-1.21-2.2.36-neoforge.jar")
     // glodium 是 ExtendedAE 的前置库。
     localRuntime files("libs/Glodium-1.21-2.2-neoforge.jar")
+    // Cloth Config：dev 客户端也要能打开本 mod 的配置界面（它的类只在客户端被加载，专用服不受影响）。
+    localRuntime files("libs/cloth-config-15.0.140-neoforge.jar")
     // The One Probe：只为了在 dev / 冒烟环境里真实验证 MeProviderTopPlugin 的 IMC 注册路径
     // （启动日志里应出现「[悬浮提示] The One Probe 插件已注册」）。同样走 Maven，不进仓库。
     localRuntime "maven.modrinth:the-one-probe:1.21_neo-12.0.8"

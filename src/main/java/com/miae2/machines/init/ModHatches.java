@@ -32,14 +32,23 @@ public final class ModHatches {
 
     public static final int ITEM_INPUT_SLOTS = 9;
     /**
-     * 物品输出槽：<b>3 排 = 27 格</b>（2026-10-04 从 1 排扩到 3 排）。
+     * 物品输出槽：<b>4 排 = 36 格</b>（2026-10-04 从 1 排 → 3 排 → 4 排）。
      *
      * <p>为什么不能只有 1 排：EI 的处理阵列按「输出格一共还装得下多少」反推并行倍率，而它<b>真</b>插入时
      * 一格最多 {@code ItemVariant.getMaxStackSize()} = 64（见 {@code MePatternProviderBlockEntity#lockOutputs}）。
-     * 1 排（9 格）时一个产物最多锁 1~9 格 ⇒ 倍率上限 {@code 64 * 格数 / 单次产量}；3 排后上限变成
-     * {@code 64 * 27 / 单次产量}，同时给产物留出 27×64 的缓冲。
+     * 1 排（9 格）时一个产物最多锁 1~9 格 ⇒ 倍率上限 {@code 64 * 格数 / 单次产量}；4 排后上限变成
+     * {@code 64 * 36 / 单次产量}，同时给产物留出 36×64 = 2304 件的缓冲。
+     *
+     * <p>为什么是 4 排而不是更多：MI 的机器 GUI 背景贴图只有 256 高（
+     * {@code MachineScreen#renderBg} 用 {@code v = 256 - backgroundHeight + 4}），而槽位区高度 =
+     * {@code 20 + 18 * 行数 + 100}。4 排物品输出 ⇒ 共 7 行 = 246 ≤ 256 已接近上限，再加一排（8 行 = 264）
+     * 就会超出贴图（症状是顶部/底部错位），要更多只能换更大的贴图或分页。
+     *
+     * <p>为什么 4 排值得：整合包的并行仓（如 bingxing「并行仓」）会在配方完成的那一 tick 里额外重跑
+     * 最多 2047 遍配方，且<b>不检查输出空间</b>（MI 的 {@code putItemOutputs} 放不下只置 {@code ok=false}，
+     * 调用方丢弃返回值 ⇒ 产物静默销毁）。输出格越多，这种「一批合成瞬时产出」越装得下。
      */
-    public static final int ITEM_OUTPUT_SLOTS = 9 * 3;
+    public static final int ITEM_OUTPUT_SLOTS = 9 * 4;
     public static final int FLUID_INPUT_SLOTS = 9;
     public static final int FLUID_OUTPUT_SLOTS = 9;
     // 超堆叠直接到上限（单等级、无升级）
@@ -103,8 +112,9 @@ public final class ModHatches {
     /**
      * GUI 参数：高度按槽位行数<b>算出来</b>（{@link MePatternProviderBlockEntity#requiredGuiHeight}）。
      *
-     * <p>以前这里写死 {@code backgroundHeight(190)}，正好只够 1+1+1+1 四行；物品输出加到 3 排（共 6 行）后
+     * <p>以前这里写死 {@code backgroundHeight(190)}，正好只够 1+1+1+1 四行；物品输出加到 4 排（共 7 行 = 246）后
      * 若不同步加高，最下面两行槽位会被玩家背包压住（不会有任何报错，只表现为「格子看不见」）。
+     * 高度上限是贴图高度 256（见 {@link #ITEM_OUTPUT_SLOTS}），自检里有断言把关。
      */
     private static MachineGuiParameters guiParams(String blockId) {
         return new MachineGuiParameters.Builder(blockId, true)

@@ -10,7 +10,15 @@
   "item.mi_ae2_pattern_provider.advanced_overclock_module": "Advanced Overclock Module",
   "item.mi_ae2_pattern_provider.advanced_overclock_module.desc1": "Insert into the overdrive module slot of any MI electric machine.",
   "item.mi_ae2_pattern_provider.advanced_overclock_module.desc2": "Runs at maximum efficiency from the first tick and releases the recipe immediately - no recipe locking.",
+  "item.mi_ae2_pattern_provider.quantum_overclock_module": "Quantum Overclock Module",
+  "item.mi_ae2_pattern_provider.quantum_overclock_module.desc1": "Upgrade of the Advanced Overclock Module. Only goes into a Processing Array controller (the two are mutually exclusive).",
+  "item.mi_ae2_pattern_provider.quantum_overclock_module.desc2": "Everything the Advanced Overclock Module does, plus %s times as many parallel batches as the machine count (still limited by input amounts and output slot space - it lowers the multiplier instead of voiding products).",
+  "config.mi_ae2_pattern_provider.title": "MI AE2 Pattern Provider",
+  "config.mi_ae2_pattern_provider.category.quantum_overclock": "Quantum Overclock Module",
+  "config.mi_ae2_pattern_provider.parallel_multiplier": "Parallel multiplier",
+  "config.mi_ae2_pattern_provider.parallel_multiplier.tooltip": "Multiplied by the Processing Array's machine count (cap 64, so 64 machines x 4 = 256 parallel batches). This is only a ceiling: the real multiplier is clamped again by input amounts and output slot space, and it is lowered instead of voiding products. Takes effect on the next recipe calculation after saving - no game restart needed.",
   "mod.mi_ae2_pattern_provider": "MI AE2 Pattern Provider",
+  "message.mi_ae2_pattern_provider.quantum_needs_array": "The Quantum Overclock Module only supports Processing Arrays",
   "text.mi_ae2_pattern_provider.device_online": "Device Online",
   "text.mi_ae2_pattern_provider.device_offline": "Device Offline"
 }

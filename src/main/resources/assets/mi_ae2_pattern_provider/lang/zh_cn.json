@@ -10,7 +10,15 @@
   "item.mi_ae2_pattern_provider.advanced_overclock_module": "高级超频模块",
   "item.mi_ae2_pattern_provider.advanced_overclock_module.desc1": "装进 MI 电动机器（含处理阵列控制器）的超频模块槽。",
   "item.mi_ae2_pattern_provider.advanced_overclock_module.desc2": "机器开局即按最高效率运行，且做完立刻释放配方，不锁配方。",
+  "item.mi_ae2_pattern_provider.quantum_overclock_module": "量子超频模块",
+  "item.mi_ae2_pattern_provider.quantum_overclock_module.desc1": "高级超频模块的升级版，只认处理阵列控制器（与高级超频模块互斥）。",
+  "item.mi_ae2_pattern_provider.quantum_overclock_module.desc2": "包含高级超频模块的全部效果，并额外提供 %s 倍于机器数的并行批次（受输入料量与输出格空间限制，装不下时会自动降倍率而不是丢产物）。",
+  "config.mi_ae2_pattern_provider.title": "MI AE2 样板供应器",
+  "config.mi_ae2_pattern_provider.category.quantum_overclock": "量子超频模块",
+  "config.mi_ae2_pattern_provider.parallel_multiplier": "并行倍率",
+  "config.mi_ae2_pattern_provider.parallel_multiplier.tooltip": "乘在处理阵列的机器数上（机器数上限 64，即 64 台机器 × 4 = 256 并行）。这只是上限：实际并行还会被输入料量与输出格空间二次夹紧，装不下时自动降倍率而不是丢产物。保存后立即对下一次配方计算生效，不需要重启游戏。",
   "mod.mi_ae2_pattern_provider": "MI AE2 样板供应器",
+  "message.mi_ae2_pattern_provider.quantum_needs_array": "量子超频模块仅支持处理阵列",
   "text.mi_ae2_pattern_provider.device_online": "设备在线",
   "text.mi_ae2_pattern_provider.device_offline": "设备离线"
 }

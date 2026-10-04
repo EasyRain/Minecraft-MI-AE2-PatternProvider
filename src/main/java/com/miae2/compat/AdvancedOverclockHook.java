@@ -1,17 +1,15 @@
 package com.miae2.compat;
 
 import aztech.modern_industrialization.machines.MachineBlockEntity;
-import aztech.modern_industrialization.machines.components.OverdriveComponent;
-import com.miae2.items.ModItems;
-import net.minecraft.world.item.ItemStack;
+import com.miae2.items.OverclockModules;
 import net.swedz.tesseract.neoforge.compat.mi.hook.MIHookEfficiency;
 import net.swedz.tesseract.neoforge.compat.mi.hook.MIHookEntrypoint;
 import net.swedz.tesseract.neoforge.compat.mi.hook.context.machine.EfficiencyMIHookContext;
 
 /**
- * 「高级超频模块」的行为实现——用 MI 官方（经 tesseract 暴露）的 {@code MIHookEfficiency} 钩子，
- * <b>不碰 MI 内部逻辑、也不需要 mixin MI 的效率代码</b>（tesseract 自己已经 mixin 了
- * {@code CrafterComponent} 并分发这些回调）。
+ * 「高级超频模块」（以及包含它全部行为的「量子超频模块」）的行为实现——用 MI 官方（经 tesseract
+ * 暴露）的 {@code MIHookEfficiency} 钩子，<b>不碰 MI 内部逻辑、也不需要 mixin MI 的效率代码</b>
+ * （tesseract 自己已经 mixin 了 {@code CrafterComponent} 并分发这些回调）。
  *
  * <h2>MI 原本的效率机制（为什么要另做一个模块）</h2>
  * {@code CrafterComponent#tickRecipe} 里：
@@ -62,7 +60,7 @@ public final class AdvancedOverclockHook implements MIHookEfficiency {
 
     @Override
     public void onTickStart(EfficiencyMIHookContext context) {
-        if (hasAdvancedModule(context)) {
+        if (hasOverclockModule(context)) {
             context.setEfficiencyTicks(context.hasActiveRecipe() ? context.getMaxEfficiencyTicks() : 0);
         }
     }
@@ -70,7 +68,7 @@ public final class AdvancedOverclockHook implements MIHookEfficiency {
     @Override
     public void onTickEnd(EfficiencyMIHookContext context, long eu) {
         // eu == 0 表示这一 tick 没在按 recipeMaxEu 工作（做完/停转/断电）→ 立刻归零，好让配方马上被释放
-        if (eu == 0L && hasAdvancedModule(context)) {
+        if (eu == 0L && hasOverclockModule(context)) {
             context.setEfficiencyTicks(0);
         }
     }
@@ -78,19 +76,17 @@ public final class AdvancedOverclockHook implements MIHookEfficiency {
     @Override
     public void onReadNbt(EfficiencyMIHookContext context) {
         // 读档后也立刻回到满档，避免重进世界要重新爬
-        if (hasAdvancedModule(context)) {
+        if (hasOverclockModule(context)) {
             context.setEfficiencyTicks(context.hasActiveRecipe() ? context.getMaxEfficiencyTicks() : 0);
         }
     }
 
-    /** 该机器是否装着本 mod 的高级超频模块。 */
-    private static boolean hasAdvancedModule(EfficiencyMIHookContext context) {
+    /** 该机器是否装着本 mod 的超频模块（高级或量子；量子模块包含高级模块的全部行为）。 */
+    private static boolean hasOverclockModule(EfficiencyMIHookContext context) {
         MachineBlockEntity machine = context.getMachineBlockEntity();
         if (machine == null) {
             return false;
         }
-        ItemStack module = machine.components.mapOrDefault(
-                OverdriveComponent.class, OverdriveComponent::getDrop, ItemStack.EMPTY);
-        return !module.isEmpty() && module.is(ModItems.ADVANCED_OVERCLOCK_MODULE.get());
+        return OverclockModules.isOverclockModule(OverclockModules.moduleIn(machine));
     }
 }

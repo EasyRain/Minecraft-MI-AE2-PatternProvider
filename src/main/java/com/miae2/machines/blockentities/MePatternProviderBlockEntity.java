@@ -120,6 +120,9 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
     // 当前正在处理（累计发配材料中 / 机器制作中）的样板；null 表示空闲
     private IPatternDetails activePattern;
 
+    // 输出格容量守卫的告警去重：只在「口径不一致」这个状态第一次出现时报一次，恢复正常后重置
+    private boolean capacityGuardWarned;
+
     /** 读档初始化只做一次（见 tick()）。 */
     private boolean loadInitDone;
 
@@ -272,8 +275,8 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         // ⓪'' 把「空着且没锁」的输出格补锁成空（AIR / 空流体）—— 这是 lockOutputs 一直在维持的不变量：
         //      处理阵列靠 `areAllOutputSlotsLocked()` 消除配方歧义（**全锁住**时遇到第一个匹配配方就 break，
         //      否则可能 matchesMultipleRecipes 直接放弃开工）。
-        //      为什么要在这里补：**槽数会变**。2026-10-04 物品输出从 1 排（9 格）扩到 3 排（27 格），
-        //      旧存档里只有前 9 格带着原来的锁，新增的 18 格是「空且未锁」——不管的话阵列会一直看到
+        //      为什么要在这里补：**槽数会变**。2026-10-04 物品输出从 1 排（9 格）扩到 4 排（36 格），
+        //      旧存档里只有前几格带着原来的锁，新增的格子是「空且未锁」——不管的话阵列会一直看到
         //      「输出格没全锁」，直到下一次 pushPattern 才恢复正常。
         //      ⚠️ 只锁**空且未锁**的格：已经锁着的（产品锁、或上次遗留的锁）一律不碰 —— 解锁会让在途产物
         //      被当成「不该收」而静默销毁（根因③）。
@@ -825,7 +828,7 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
     /**
      * 把输出格锁定为样板的产物、没用到的格锁为空（让处理阵列走确定性配方匹配）。
      *
-     * <p><b>物品产物会「摊开」占满全部物品输出格</b>（当前 3 排 = 27 格），而不是只锁刚好装得下的那一格：
+     * <p><b>物品产物会「摊开」占满全部物品输出格</b>（当前 4 排 = 36 格），而不是只锁刚好装得下的那一格：
      * 处理阵列（tesseract 的
      * {@code MultipliedCrafterComponent#calculateItemOutputRecipeMultiplier}）是按「输出格一共还能装多少」
      * 二分反推并行倍率的，而它<b>真</b>插入时一格最多放 {@code ItemVariant.getMaxStackSize()} = 64
@@ -889,7 +892,7 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
      * <b>当前倍率上限最低</b>的那个产物（单产物上限 = {@code 64 * 格数 / 单次产量}）。
      *
      * <p>这个「往最低处加水」的贪心会把各产物的上限抬平，最终格数近似<b>正比于单次产量</b>：
-     * 单次产量 {@code 2 / 4 / 8}、27 格 ⇒ 约 {@code 4 / 8 / 15} 格，<b>不会</b>退化成
+     * 单次产量 {@code 2 / 4 / 8}、36 格 ⇒ {@code 6 / 10 / 20} 格（天花板 160~192），<b>不会</b>退化成
      * 「每个产物 1 格、剩下的全给某一个」。阵列的可行倍率是
      * {@code min_i(64 * 格数_i / 产量_i)}，所以按产量成比例分配恰是这个 max-min 目标的最优解。
      *
@@ -1000,6 +1003,12 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
      * 而那时本供应器还挂着上一步的 {@code activePattern}（清理要等"网格上一个忙的 CPU 都没有"，大合成中途
      * 永远不会满足）⇒ 第二份料永远推不进来，任务卡死在「输出格还锁着上一步的产物、输入格是空的」。<b>用户报的
      * 「单机器连续配方卡住」就是这个。</b>
+     *
+     * <p>下单前还有一道<b>输出格容量守卫</b>（顺序很重要）：先<b>核对</b>容量口径
+     * （{@link #miae2$outputCapacityIsTruthful(IPatternDetails)}，纯查询），再把我们自己留下的"无上限"标志夹回来
+     * （{@link #miae2$enforceSlotCapacityPolicy()}，幂等），最后才决定拒不拒收。口径不一致就整体拒收 ——
+     * 不发配材料比"发了却被阵列静默销毁"好（AE 每 tick 重试 ⇒ 合成任务显示为一直等待；
+     * 标志被夹回之后，下一 tick 的 push 就能过）。
      */
     public boolean pushPattern(IPatternDetails patternDetails, KeyCounter[] inputHolder) {
         // 没被任何多方块匹配上就不收料：可能是还没成形，也可能是「同一阵列放了多个供应仓 → 结构被判无效」。
@@ -1011,6 +1020,11 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
                 && (this.miae2$isAnyCraftInFlight() || this.miae2$hasAnyInput() || this.miae2$hasAnyOutput())) {
             return false;
         }
+        boolean capacityIsTruthful = this.miae2$outputCapacityIsTruthful(patternDetails);
+        this.miae2$enforceSlotCapacityPolicy();
+        if (!capacityIsTruthful) {
+            return false;
+        }
         if (!this.insertPatternInputs(inputHolder, IActionSource.ofMachine(this))) {
             return false;
         }
@@ -1020,6 +1034,81 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
             this.lockOutputs(patternDetails);
             LOGGER.info("[样板切换] 输出格已按新样板重新上锁：{} @ {}", patternDetails.getOutputs(), this.getBlockPos());
         }
+        return true;
+    }
+
+    /**
+     * 输出格容量守卫：核对「容量查询路径承诺的空间」是否大于「真插入能兑现的上限」。
+     *
+     * <p><b>为什么需要</b>：处理阵列的并行倍率是从<b>模拟</b>反推出来的。tesseract 的
+     * {@code MultipliedCrafterComponent#calculateItemOutputRecipeMultiplier} 用
+     * {@code MIStorage.insert(..., Actionable.SIMULATE)}（最终落到 MI 的
+     * {@code ConfigurableItemStack#getRemainingCapacityFor}）二分「这些产物装得下吗」，而它<b>真插入</b>时
+     * 走的是 {@code output.variant().getMaxStackSize() - amount}（见 {@code CrafterComponentHelper#putItemOutputs}
+     * 的注释：「If putting the output, don't respect the adjusted capacity in case it was reduced during the
+     * processing.」——上游<b>故意</b>让两条路径口径不同）。正常情况下没人会出事：MI 自己就把容量夹在物品最大
+     * 堆叠数上（{@code getRemainingCapacityFor} 里就有 {@code Math.min(key.getMaxStackSize(), adjustedCapacity)}）
+     * ⇒ 两条路径相等。<b>要分叉得同时满足两条</b>：容量查询路径看到的物品最大堆叠数被抬高（有人重定向了
+     * {@code ItemVariant#getMaxStackSize()}）<b>且</b> {@code adjustedCapacity} 也被抬到真实堆叠数之上
+     * —— 本仓曾经的「输出槽无上限」标志正是这个组合（{@code miae2$setUnbounded(true)} 同时写
+     * {@code adjustedCapacity = MAX} 与那三个 {@code @Redirect}）。此时模拟虚高：阵列据此把并行倍率抬到
+     * 机器数，装不下的产物被 {@code putItemOutputs} 原地丢弃（返回值没人看）⇒ AE 的 CPU 永远等不到足量产、
+     * 任务永久挂起。所以除了自动回退，再加这道「拒收」守卫。
+     *
+     * <p><b>判据</b>（每个物品输出格 × 这一份样板的每个物品产物）：
+     * <pre>
+     * 模拟承诺上限 = getRemainingCapacityFor(probe) + getAmount()   // 走（可能被重定向的）容量查询路径
+     * 真插入上限   = probe.getMaxStackSize()                          // 直接问 ItemVariant，这才是机器真正用的值
+     * 模拟承诺上限 &gt; 真插入上限  ⇒  口径不一致  ⇒  拒绝发配材料
+     * </pre>
+     *
+     * <p>注意这<b>不是</b>「产物数量 vs 槽位总数」的预测，而是唯一能自己验证的不变量：
+     * <ul>
+     *   <li>EI/IO 处理阵列的倍率本来就由空间反推（{@code canItemOutputsAllFit}）⇒ 预测必然一致，没有意义；</li>
+     *   <li>真正<b>无视空间</b>的第三方并行仓（如 bingxing 的 8/64/256/512/2048 档）不走这条模拟，
+     *       判它得反射它的方块实体，预测也拦不住；</li>
+     *   <li>只按本仓的输出格数预测会<b>误拒</b>（多方块里还有别的输出仓/控制器槽位）⇒ 把本来能跑的整合包卡死。</li>
+     * </ul>
+     *
+     * <p>本方法是<b>纯查询</b>（只动「告警去重」这一个布尔，不改槽位状态），所以冒烟自检可以放心直接调它；
+     * 调用方 {@link #pushPattern} 会在拿到结果之后调 {@link #miae2$enforceSlotCapacityPolicy()} 把能修的修掉
+     * （"口径不一致"这个状态本身<b>不会</b>被这个守卫修正）。
+     *
+     * <p>流体不查：{@code ConfigurableFluidStack.capacity} 是 long，模拟与真插入都用 {@code getRemainingSpace()}，
+     * 没有这条不对称。
+     *
+     * @return {@code true} = 容量口径一致，可以按老规矩发配材料
+     */
+    public boolean miae2$outputCapacityIsTruthful(IPatternDetails patternDetails) {
+        for (int slotIndex = 0; slotIndex < this.itemOutputs.size(); slotIndex++) {
+            ConfigurableItemStack stack = this.itemOutputs.get(slotIndex);
+            for (GenericStack output : patternDetails.getOutputs()) {
+                if (!(output.what() instanceof AEItemKey itemKey)) {
+                    continue;
+                }
+                ItemVariant probe = ItemVariant.of(itemKey.getItem());
+                long remaining = stack.getRemainingCapacityFor(probe);
+                if (remaining <= 0L) {
+                    // 没空间是另一回事（格已满、或容量被调小过），不是口径分歧。
+                    continue;
+                }
+                long promisedTotal = remaining + stack.getAmount();
+                long deliverableTotal = probe.getMaxStackSize();
+                if (promisedTotal > deliverableTotal) {
+                    if (!this.capacityGuardWarned) {
+                        this.capacityGuardWarned = true;
+                        LOGGER.warn("[输出守卫] 拒绝发配材料 @ {} —— 第 {} 个输出格的容量查询路径比真插入多承诺了空间："
+                                        + "模拟说能到 {} 个，真插入一趟最多 {} 个（探测物品 {}）。"
+                                        + "继续发货会被阵列按虚高的上限抬并行倍率，装不下的产物被静默销毁。"
+                                        + "请检查有没有别的 mod 改写了容量查询路径里的物品最大堆叠数。",
+                                this.hasLevel() ? this.getBlockPos() : null, slotIndex, promisedTotal,
+                                deliverableTotal, probe);
+                    }
+                    return false;
+                }
+            }
+        }
+        this.capacityGuardWarned = false;
         return true;
     }
 
@@ -1245,9 +1334,9 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
     /**
      * 四组槽位按行数算出的<b>最低 GUI 高度</b>，{@code ModHatches} 用它设 {@code backgroundHeight}。
      *
-     * <p>做成公式而不是写死常数：写死 190 正好只够 4 行（1+1+1+1）。把物品输出加成 3 排后共 6 行，
+     * <p>做成公式而不是写死常数：写死 190 正好只够 4 行（1+1+1+1）。把物品输出加成 4 排后共 7 行 = 246，
      * 若不同步加高 GUI，最下面两行槽位会被玩家背包压住/画到界面外 —— 那种问题不会有任何报错，
-     * 只会表现为「格子看不见」。
+     * 只会表现为「格子看不见」。上限是 MI 背景贴图高度 256（4 排 = 246 已经很接近，自检有断言把关）。
      */
     public static int requiredGuiHeight(int itemInSlots, int itemOutSlots, int fluidInSlots, int fluidOutSlots) {
         int rows = rowsOf(itemInSlots) + rowsOf(itemOutSlots) + rowsOf(fluidInSlots) + rowsOf(fluidOutSlots);

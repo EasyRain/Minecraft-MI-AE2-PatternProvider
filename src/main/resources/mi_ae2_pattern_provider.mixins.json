@@ -11,7 +11,10 @@
     "EaepExtendedHostMixin",
     "AppfluxEnergyTargetMixin",
     "OverdriveComponentMixin",
-    "OverdriveSlotTypeMixin"
+    "OverdriveSlotTypeMixin",
+    "OverdriveSlotGateMixin",
+    "ProcessingArrayParallelMixin",
+    "MultiProcessingArrayParallelMixin"
   ],
   "client": [
     "AEBaseScreenMixin"

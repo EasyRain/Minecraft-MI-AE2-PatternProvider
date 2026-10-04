@@ -2,6 +2,164 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.2.0] - 2026-10-04
+
+### 新增
+
+- **下单前的「输出格容量守卫」（`MePatternProviderBlockEntity#miae2$outputCapacityIsTruthful`，由用户 m03741 提议）**：
+  `pushPattern` 接料之前核对一条可自证的不变量 —— **容量查询路径承诺的空间**不得超过**真插入能兑现的上限**：
+  `getRemainingCapacityFor(probe) + getAmount() <= probe.getMaxStackSize()`（`probe` 取这一份样板的每个物品产物，
+  逐个输出格查）。不一致就**整体拒收**、不发配材料（AE 每 tick 重试 ⇒ 合成在界面上显示为「一直等待」），
+  同一次调用还会把本仓自己留下的"无上限"输出槽标志夹回普通容量，所以下一 tick 的 push 就能过。
+  为什么不做「预判产物数量 vs 槽位数」：阵列的倍率本来就是按输出空间反推的（预测必然一致、纯属多余），
+  而**无视空间**的第三方并行仓（bingxing）根本不走这条模拟；只按自己 36 格预测还会**误拒**
+  （多方块里可能还有别的输出仓/控制器槽位）⇒ 反而把能跑的整合包卡死。
+  上游依据：tesseract `CrafterComponentHelper#putItemOutputs` 里那条**故意**的口径差异
+  （「If putting the output, don't respect the adjusted capacity in case it was reduced during the processing.」
+  ⇒ 真插入按 `variant.getMaxStackSize() - amount`、模拟按 `min(getMaxStackSize(), adjustedCapacity) - amount`），
+  只有「容量查询路径的 maxStackSize 被抬高」**且**「`adjustedCapacity` 也被抬到真实堆叠数之上」时两者才会分叉
+  —— 正是下面「输出槽无上限」那条根因的组合。
+
+- **量子超频模块（`quantum_overclock_module`，由用户 m03941 提议）**：**高级超频模块的升级版** ——
+  装进**同一个**「超频模块」槽（两者**互斥**，同一个槽只能放一个物品，互斥性是结构性保证、不需要额外判断），
+  既有高级超频的全部效果（`AdvancedOverclockHook` 的家族判定覆盖 `isOverclockModule`），**又给 EI 处理阵列提供并行**。
+  实现：`ProcessingArrayParallelMixin` 在 `ProcessingArrayBlockEntity#getMaxMultiplier()` 的 `RETURN` 处
+  把它从「机器数」抬成「机器数 × 配置倍率」（`OverclockModules#scaleMaxMultiplier`），IO 的处理阵列走一个
+  `@Pseudo` + 字符串 targets 的姊妹 mixin（缺 IO 时静默不生效）。**抬的是天花板，不是算完的结果** ——
+  真实并行倍率仍由 tesseract `MultipliedCrafterComponent#calculateMultiplier` 按输入料量与输出格空间二分反推
+  ⇒ 装不下时自动降倍率、绝不吞产物（若改成「把结果乘 N」，输入侧会出现「模拟够、真扣不够」）。
+  倍率可在 config 调（`mi_ae2_pattern_provider-common.toml` 的 `quantum_overclock.parallel_multiplier`，
+  默认 **4×**、范围 **2–16×**；64 机器 = 256 并行）。上限取 16× 的依据：本仓输出空间
+  `36 格 × 64 = 2304` 件，官方配方每批物品产物量 P 的分布为 `≤1 52.6% / ≤2 66.1% / ≤4 77.2% / ≤9 95.1%`，
+  而 `倍率 ≤ 36/P`（P=1→36、P=2→18、P=4→9、P=9→4）⇒ 16× 是「单产物理论极限 36×」的一半以下。
+  **不是免费产能**：EU 与耗时沿用上游语义同倍放大（4× 速度 = 4× EU/t、总能量 4×，
+  能源供不上时耗时线性拉长，见 `EuCostTransformer` × `getRecipeMultiplier()`）。**不动输出格真实容量**。
+  **并行只对处理阵列生效**：同一块模块插进单方块机器或其它多方块机器时只等于高级超频模块（满效率 + 立刻释放配方），
+  不会多出并行 —— 那些机器没有「机器数」这一层（单方块走 MI 的 `CrafterComponent`；EI 大型电炉 /
+  IO 热解炉的 `getMaxMultiplier()` 是**线圈档位的批处理上限**），而所有 Mult* 机器的共享漏斗
+  `MultipliedCrafterComponent#getMaxMultiplier()` 挂上去就等于给它们免费加产能，属明确越界，故只挂数组自己的类。
+  配方（**超导压**档 —— 用户 m04415 指出「都叫量子了合成材料不能和高级的用同一阶的材料」后重做）：
+  组装机（`eu 64` / `duration 1000`）或工作台 —— 高级超频模块×1 + **量子电路×2 + 超导体板×4**
+  （工作台摆法 `s.s / qaq / s.s`：s = 超导体板、q = 量子电路、a = 高级超频模块）。
+  量子电路本身还要量子电路板（12 超导电缆 + 6 铱板 + 2 钚电池 + 50 mB 氦-3）⇒ 2 个量子电路约为 MI 自家
+  `quantum_upgrade`（8 量子电路 + 奇异物质 + 50 mB 反物质）的四分之一：高一整档，但不是直接跳终局。
+  贴图由高级模块贴图再经一次色相映射（橙 → 紫）得到，画风与 MI 一致。
+
+- **量子超频模块「只许装进处理阵列控制器」（用户 m04850 要求）**：右键或从 GUI 拖进普通机器时会被**拒收**
+  （右键还会在**聊天框**提示「量子超频模块仅支持处理阵列」—— 不用动作栏是因为右键普通机器会打开它的 GUI、
+  动作栏文字会被 GUI 挡住，聊天框里关掉 GUI 也仍看得见；用户 m05085 实测反馈），**高级模块与原版模块照旧到处可插**，
+  创造栏/JEI 里的可见性也不变。判定依据是**「可插 = 并行真的会生效」这个等价关系**：`QuantumParallelHost`
+  标记接口由两个并行 mixin 在自己的目标类上顺手 `implements`，所以宿主天然只有 EI 处理阵列
+  （以及装了 IO 时的多处理阵列）—— mixin 注入点一旦失效，接口就不会贴上，玩家会**立刻看到模块被拒收**，
+  而不是白装一个没效果的模块。
+  实现（两条插入路径各自拦）：右键在 `OverdriveComponentMixin#onUse` 按机器拒收；
+  GUI 在 `SlotPanel#setupMenu` 用 `@Redirect` 把 `MenuFacade` 换成会包装超频槽的那一个（`OverclockSlotGate`），
+  包装出的槽 `mayPlace` 先问机器再问原谓词 —— **拦在服务端槽位谓词上，物品不会离开玩家光标（不丢件）**。
+  刻意**不改** `OverdriveComponent#setStackServer`：那才是「物品已经从光标拿走、再拒绝就丢件」的时刻。
+  代价是客户端预览会短暂把模块画进槽里（服务端回滚并重同步）—— 客户端 `SlotPanelClient` 的槽没有任何机器引用，
+  要做客户端拦截就得多引一个客户端专属 mixin，不值。
+  冒烟自检第 14 条三层钉住：判定表（非宿主拒收量子 / 宿主放行 / 原版与高级到处放行 / 空手不触发）；
+  标记接口覆盖面（EI 处理阵列 = 宿主，MI 单方块与 MI 多方块 = 非宿主，装了 IO 则多处理阵列也必须是宿主）；
+  **真实槽位**（拿真实机器的真实 `SlotPanel` 真建一次菜单，断言宿主槽收量子、`modern_industrialization:assembler`
+  这类普通机器槽不收量子但照收原版/高级）—— 最后一条是唯一能证明 `@Redirect` 真贴上了的断言。
+
+- **Cloth Config 游戏内配置界面（可选依赖，用户 m04598 要求）**：装了 [Cloth Config](https://modrinth.com/mod/cloth-config)
+  （modId `cloth_config`）时，在「Mods 界面 → 本 mod → Config」里直接调并行倍率，字段带范围 2–16、默认值 4 与
+  说明 tooltip。实现：`com.miae2.client.MiAe2ConfigScreen` 用 Cloth Config 画界面，通过 NeoForge 的
+  `IConfigScreenFactory` 扩展点注册（`ModContainer#registerExtensionPoint`）。
+  **刻意没有挂「需要重启」徽章**（Cloth Config 的 `requireRestart()`）：倍率在
+  `MiAe2Config.quantumParallelMultiplier()` ← `OverclockModules.scaleMaxMultiplier()` ← `ProcessingArrayParallelMixin`
+  这条链上是每次算配方时**现读**的，保存后下一次配方计算就生效，标「需要重启」反而是错误暗示；这件事由冒烟自检的
+  「改配置 → 立刻读到新值 → 还原」活性断言钉住。
+  客户端专属类必须关在单独的文件里（`IConfigScreenFactory` 在 `net.neoforged.neoforge.client.gui`，专用服加载即
+  `NoClassDefFoundError`），调用点用 `FMLEnvironment.dist.isClient() && ModList.get().isLoaded("cloth_config")` 双重守护。
+  同时撤掉了物品 Shift tooltip 里那行配置说明 —— 配置项该出现在配置界面里，而不是塞在物品说明里。
+  Cloth Config 是 LGPL-3.0，jar 随 `libs/` 分发（与 AE2 同理），只做编译期链接 + dev 运行时，没装它的玩家一切照旧。
+
+### 修复
+
+- **两个超频模块不在创造物品栏里，JEI 物品列表里也搜不到（用户 m04362 报告）**：
+  根因是 **JEI 19 的物品列表就是创造栏的内容** —— `mezz.jei.library.plugins.vanilla.ingredients.ItemStackListFactory`
+  读的是各创造栏的 `displayItems`，所以「没进任何创造栏」的物品在创造栏与 JEI 里都缺席（合成配方里仍查得到，
+  因为配方索引是另一条路）。本 mod 的机壳之所以能被找到，是因为它走 MI 的注册体系
+  （`MachineRegistrationHelper` → `MIBlock.block`，而 `BlockDefinition` 里 `MIItem.item(...)` 会把物品塞进
+  `MIItem.ITEM_DEFINITIONS`，MI 的 `general` 栏就是遍历这张表），两个模块却只注册在本 mod 自己的
+  `DeferredRegister` 里。**不改注册命名空间**（那会把 id 从 `mi_ae2_pattern_provider:*` 变成
+  `modern_industrialization:*`，破坏已有存档里的物品与配方 id），改为监听 `BuildCreativeModeTabContentsEvent`
+  把两个模块 `insertAfter` 到 MI 原版超频模块之后（NeoForge 先跑完 MI 的 `displayItems` 再派发事件，
+  锚点必然在位；万一不在就退回追加到栏尾，任何情况下不抛异常）。
+- **量子模块的工作台配方曾经整条解析失败、物品只能靠组装机做出来（本轮自查发现）**：上一轮把工作台摆法写成
+  `"s.s" / "qaq" / "s.s"`，那个 `.` 在原版 `crafting_shaped` 里是**未定义的符号**（空位只认空格），于是
+  `Parsing error loading recipe mi_ae2_pattern_provider:quantum_overclock_module_asbl: Pattern references symbol '.' but it's not defined in the key`
+  —— 游戏只在日志里留一行 ERROR，照跑不崩，玩家视角就是「这条配方不存在」。现已改成空格 `"s s" / "qaq" / "s s"`，
+  并新增冒烟自检 `assertRecipesLoaded`（见「内部」）钉住这一类问题。
+- **量子模块的并行倍率「找不到哪里能设置」（用户 m04362 报告）**：值一直可配，藏在
+  `config/mi_ae2_pattern_provider-common.toml` 的 `[quantum_overclock] parallel_multiplier`，只是没有任何地方
+  告诉玩家。现在：启动时打一条 INFO 给出该文件的**绝对路径**（`FMLPaths.CONFIGDIR`），
+  并接上 **Cloth Config 的游戏内配置界面**（「Mods 界面 → 本 mod → Config」，见「新增」）。
+  物品 Shift tooltip 里那行配置说明按用户要求撤掉了 —— 配置项应该出现在配置界面里，而不是塞在物品说明里。
+
+### 改动
+
+- **物品输出槽从 3 排扩到 4 排（27 → 36 格，瞬时输出空间 1728 → 2304 件）**：为整合包的并行仓留出余量
+  （例如 bingxing「现代工业化并行仓」：基础 8 / 高级 64 / 精英 256 / 终极 512 / 创造 2048 档）。
+  那类 mod 在配方完成的那一 tick 里额外重跑最多 2047 遍配方，**完全不检查输出空间** —— MI 的
+  `CrafterComponent#putItemOutputs` 装不下时只置 `ok = false` 并把剩余产物原地丢弃
+  （`mi-src/.../components/CrafterComponent.java:589-591`），而调用方丢弃了返回值 ⇒ 输入照扣、产物静默销毁、
+  AE 的合成任务永远等不到足量产而挂起。所以「并行等级 × 每批物品产物」必须**一次性**装得下。
+  4 排后：高级 64 档可支撑每批 ≤36 件、精英 256 档 ≤9 件、终极 512 档 ≤4 件、创造 2048 档仅每批 1 件
+  （流体输出本来就是 9 格 × `Integer.MAX_VALUE`，不是瓶颈）。
+  GUI 高度由 228 → 246（仍是公式算出，在 MI 背景贴图 256 的上限内 —— 这是不换贴图的极限，再加一排 264 会画到贴图外）。
+  旧存档兼容：新增的格子读档时是「空且未锁」，`onLoad` 的 `lockAllEmpty` 会按原不变量补锁。
+  自检补了「GUI 高 ≤ 256（贴图上限）」与「瞬时输出空间 ≥ 256 并行 × 8 件/批」两条断言。
+
+### 内部
+
+- **新增冒烟自检「极端量边界」（`SmokeTestAutoStop#assertExtremeAmountPush`）**：确认单次 push 每个键
+  的上限是「输入槽数 × `Integer.MAX_VALUE`」（当前 9 × 2147483647 = 19,327,352,823 个物品 / mB），
+  **恰好装满被完整接纳**，**再多 1 个单位被整体拒绝且槽内容分毫不动**（不部分接收 = 不静默丢料；
+  超限时 AE2 会每 tick 重试 ⇒ 任务挂起但绝不损坏）。同时给「槽位容量保护」自检补了
+  「无上限槽装入 `Integer.MAX_VALUE` 级内容后仍能原样过 NBT 往返」的断言。
+  ——纯自检代码，**无游戏行为差异**，只在设了 `-Dmi_ae2_pattern_provider.smokeTest=...` 时运行。
+
+- **新增冒烟自检「量子超频模块」（`SmokeTestAutoStop#assertQuantumModule`）**：钉住家族判定
+  （高级/量子 = true，MI 原版与空 = false）、`grantsParallel`（只有量子 = true）、配置落在 `[2, 16]`、
+  `scaleMaxMultiplier(64) == 64 × 配置` 且 `scale(0) == 0`、以及**保守性**（`上限 × 64 ≤ 36 × 64`、
+  `默认 × 64 × 9 ≤ 36 × 64`）—— 谁把常量改大都会立刻红。另外它还断言 `SPEC.isLoaded()`（防「配置没加载 →
+  静默回落默认值」），以及**配置活性**：写一个新值 → 立刻读到新值 → 还原（这条保证游戏内配置界面
+  「保存即生效、不用重启」那句话成立；谁把倍率改成启动时缓存都会立刻红）。
+- **新增冒烟自检「量子并行（真实阵列）」（`SmokeTestAutoStop#assertQuantumParallel`，端到端）**：
+  上面的自检只验证算术，**证明不了 mixin 真的贴上了**（目标改名 / 被别的 mod 抢先 / 注入点被 inline 都会
+  静默失效而算术照旧全绿）。这条放一个**真实** EI 处理阵列控制器方块（无需成型：
+  `getMaxMultiplier()` 只读 `ProcessingArrayMachineComponent#getMachineCount()`），往它的超频槽依次放
+  空 / MI 原版超频模块 / 高级超频模块 / 量子超频模块，读同一个 `getMaxMultiplier()`：只有量子那一次
+  必须变成「机器数 × 配置倍率」。日志：`✅ 量子并行（真实阵列）自检通过——机器数 1：空=1、原版超频=1、
+  高级超频=1、量子超频=4（期望 4，配置 4×）`。
+- **新增冒烟自检「配方加载」（`SmokeTestAutoStop#assertRecipesLoaded`）**：用资源管理器列出
+  `data/mi_ae2_pattern_provider/recipe/` 下的**所有**文件，逐个到 `RecipeManager#byKey` 里查 ——
+  文件在、配方不在 = 这个 JSON 没解析成功。**配方解析失败是「静默故障」**：游戏只在日志里留一行 ERROR，
+  照跑不崩，物品就是合不出来，玩家无从判断（本轮就是这么发现工作台配方里的 `.` 号事故的）。
+  这条自检不需要维护配方清单，以后新增/改名配方都自动覆盖。冒烟自检 12 条 → **13 条**，全绿。
+
+### 已知问题（上游 tesseract / EI，被并行倍率**同比例放大**，非本模块引入）
+
+- **多个流体产物共用一个输出槽时会静默丢流体**：`MultipliedCrafterComponent` 的流体可行性检查
+  对每个流体产物**各自**按整槽剩余空间求倍率、**不扣减前一个产物已占用的量**
+  （`MultipliedCrafterComponent.java:289-290`），而真插入被 `Math.min(..., getRemainingSpace())` 截断后
+  只置 `ok = false`（`CrafterComponentHelper.java:262`），调用方 `AbstractModularCrafterComponent.java:283`
+  **丢弃了返回值** ⇒ 倍率越高，单次损失越大。官方配方里最大流体产物总量 17000 mB，绝大多数配方只有一个流体产物。
+- **概率产物（`probability < 1.0`）完全不做可行性检查**：`MultipliedCrafterComponent.java:213/:281` 用
+  `if (!(output.probability() < 1.0F))` 把它们排除在 `canItemOutputsAllFit` 之外 ⇒ 掷中后装不下的部分同样静默丢。
+  官方配方里 34 条有概率产物（macerator 22、quarry 7、centrifuge 4、heat_exchanger 1），且官方上限本就是
+  64 并行（N=1）时也可能发生。
+- **`recipeEnergy` 读档截断**：写档用 `putLong`、读档用 `tag.getInt`
+  （`AbstractModularCrafterComponent.java:324-341`，`CompoundTag#getInt` 对 LongTag 静默截断）⇒
+  `配方总 EU × 倍率 > 2^31-1` 时**读档后合成进度损坏**，阈值 `总EU > 2^31 / (64 × 倍率)`。
+  触及它的官方配方只有 `packer` 的量子装备升级（1,000,000 EU/t × 200 = 200M）与 `fusion_reactor`
+  （多方块），而 `N = 1`（原版阵列 64 并行）时 packer 那条**已经超阈值** ⇒ 既有上游问题，本模块只是放大它。
+  **建议**：把量子模块用在普通产线（本仓扫描显示 1941 条有物品产物的配方里，`总EU ≤ 2.1M` 的占绝大多数），
+  不要拿它去挂 packer 的量子升级与聚变堆。
+
 ## [1.1.1] - 2026-10-04
 
 ### 新增

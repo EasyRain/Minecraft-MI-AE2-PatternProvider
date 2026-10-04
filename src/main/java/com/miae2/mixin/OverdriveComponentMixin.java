@@ -3,7 +3,8 @@ package com.miae2.mixin;
 import aztech.modern_industrialization.MIItem;
 import aztech.modern_industrialization.machines.MachineBlockEntity;
 import aztech.modern_industrialization.machines.components.OverdriveComponent;
-import com.miae2.items.ModItems;
+import com.miae2.items.OverclockModules;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.player.Player;
@@ -15,7 +16,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * 让 MI 的「超频模块」槽也接受本 mod 的<b>高级超频模块</b>，并阻止它触发原版那套「锁死配方」。
+ * 让 MI 的「超频模块」槽也接受本 mod 的<b>超频模块</b>（高级 / 量子，两者占同一个槽所以天然互斥），
+ * 并阻止它们触发原版那套「锁死配方」。
  *
  * <p>MI 的 {@code OverdriveComponent} 只认 {@code MIItem.OVERDRIVE_MODULE}，
  * 且 {@code shouldOverdrive()} 一旦为真就会让机器空转也持续耗电（从而钉住效率、不释放配方）。
@@ -26,6 +28,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  *       「空转耗电 + 锁配方」和「满速 + 立即释放」两套机制互相打架。</li>
  * </ol>
  * MI 原版模块的行为完全不变。
+ *
+ * <p>另外这里还挡一下<b>白装</b>：量子超频模块在非处理阵列上没有并行可言（见
+ * {@code OverclockModules#blockedIn}），右键插入直接拒收并给一条聊天框提示。
  */
 @Mixin(value = OverdriveComponent.class, remap = false)
 public abstract class OverdriveComponentMixin {
@@ -33,13 +38,21 @@ public abstract class OverdriveComponentMixin {
     @Shadow
     private ItemStack overdriveModule;
 
-    /** 手持高级超频模块右键机器时，插进这个槽（对齐 MI 原版那 5 行插入逻辑）。 */
+    /** 手持本 mod 的超频模块（高级 / 量子）右键机器时，插进这个槽（对齐 MI 原版那 5 行插入逻辑）。 */
     @Inject(method = "onUse", at = @At("HEAD"), cancellable = true, remap = false)
-    private void miae2$acceptAdvancedModule(MachineBlockEntity be, Player player, InteractionHand hand,
-                                            CallbackInfoReturnable<ItemInteractionResult> cir) {
+    private void miae2$acceptOverclockModules(MachineBlockEntity be, Player player, InteractionHand hand,
+                                              CallbackInfoReturnable<ItemInteractionResult> cir) {
         ItemStack held = player.getItemInHand(hand);
-        if (held.isEmpty() || !held.is(ModItems.ADVANCED_OVERCLOCK_MODULE.get())) {
+        if (!OverclockModules.isOverclockModule(held)) {
             return; // 不是我们的模块 → 交回原逻辑
+        }
+        if (OverclockModules.blockedIn(be, held)) {
+            // 量子模块在白装的机器上（非处理阵列）没有并行可言 → 直接拒收，并当场说清原因。
+            // 打到**聊天框**而不是动作栏：右键普通机器会打开它的 GUI，动作栏文字会被 GUI 挡住
+            // （用户实测反馈），聊天框里即使随后关掉 GUI 也仍然看得见。
+            player.sendSystemMessage(
+                    Component.translatable("message.mi_ae2_pattern_provider.quantum_needs_array"));
+            return;
         }
         if (this.overdriveModule != null && !this.overdriveModule.isEmpty()) {
             return; // 槽里已有东西 → 也让原逻辑去处理

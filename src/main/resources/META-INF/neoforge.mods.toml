@@ -50,6 +50,16 @@ config="${mod_id}.mixins.json"
     ordering="AFTER"
     side="BOTH"
 
+# 可选：装了 Cloth Config 才能用「Mods 界面 → 本 mod → Config」的游戏内配置界面
+# （代码里用 FMLEnvironment.dist.isClient() && ModList.isLoaded("cloth_config") 守护；
+#  没装它时改 config/mi_ae2_pattern_provider-common.toml 也一样生效）。
+[[dependencies.${mod_id}]]
+    modId="cloth_config"
+    type="optional"
+    versionRange="[15.0.0,)"
+    ordering="AFTER"
+    side="CLIENT"
+
 # 不兼容：MI-Efficiency-Remover 把「效率」全局硬改成始终满档（直接 mixin MI 的 CrafterComponent
 # 与 tesseract 的 AbstractModularCrafterComponent，并 cancel 掉 increase/decreaseEfficiencyTicks）。
 # 它的 cancel 无法被外部 mixin 撤销，因此没法「运行时柔性失效」，只能声明不兼容。

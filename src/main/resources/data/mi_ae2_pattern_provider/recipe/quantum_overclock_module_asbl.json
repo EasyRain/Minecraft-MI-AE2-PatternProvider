@@ -1,0 +1,22 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "s s",
+    "qaq",
+    "s s"
+  ],
+  "key": {
+    "s": {
+      "item": "modern_industrialization:superconductor_plate"
+    },
+    "q": {
+      "item": "modern_industrialization:quantum_circuit"
+    },
+    "a": {
+      "item": "mi_ae2_pattern_provider:advanced_overclock_module"
+    }
+  },
+  "result": {
+    "id": "mi_ae2_pattern_provider:quantum_overclock_module"
+  }
+}
