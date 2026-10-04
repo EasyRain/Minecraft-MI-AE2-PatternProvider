@@ -123,7 +123,7 @@ gradlew build
 
 ## 许可证
 
-本 mod 采用 [MIT](LICENSE)。
+本 mod 采用 [MIT](../LICENSE)。
 
 ### 与其它 mod 的集成（不含其代码）
 

@@ -17,5 +17,11 @@ out/
 Thumbs.db
 
 # Local agent/developer notes and upload copy for this project only (local archive)
-/PROJECT_MEMORY.md
-/MODRINTH_DESCRIPTION.md
+# docs/ 里的 README.md / CHANGELOG.md / PLAN.md 随仓库公开，只忽略下面这些本地档案
+/docs/PROJECT_MEMORY.md
+/docs/MODRINTH_DESCRIPTION.md
+/docs/01-架构与集成.md
+/docs/02-大型合成卡死排查.md
+/docs/03-并行与超频模块.md
+/docs/04-自动命名与GUI可见性.md
+/docs/05-容量与超大数量.md
