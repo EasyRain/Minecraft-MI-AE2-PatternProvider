@@ -13,6 +13,8 @@
   "item.mi_ae2_pattern_provider.quantum_overclock_module": "Quantum Overclock Module",
   "item.mi_ae2_pattern_provider.quantum_overclock_module.desc1": "Upgrade of the Advanced Overclock Module. Only goes into a Processing Array controller (the two are mutually exclusive).",
   "item.mi_ae2_pattern_provider.quantum_overclock_module.desc2": "Everything the Advanced Overclock Module does, plus %s times as many parallel batches as the machine count (still limited by input amounts and output slot space - it lowers the multiplier instead of voiding products).",
+  "item.mi_ae2_pattern_provider.guide": "ME Pattern Provider Hatch Guide",
+  "item.mi_ae2_pattern_provider.guide.desc": "Right-click to open the in-game guide.",
   "config.mi_ae2_pattern_provider.title": "MI AE2 Pattern Provider",
   "config.mi_ae2_pattern_provider.category.quantum_overclock": "Quantum Overclock Module",
   "config.mi_ae2_pattern_provider.parallel_multiplier": "Parallel multiplier",

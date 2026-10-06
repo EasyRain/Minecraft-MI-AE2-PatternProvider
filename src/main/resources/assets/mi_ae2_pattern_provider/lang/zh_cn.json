@@ -13,6 +13,8 @@
   "item.mi_ae2_pattern_provider.quantum_overclock_module": "量子超频模块",
   "item.mi_ae2_pattern_provider.quantum_overclock_module.desc1": "高级超频模块的升级版，只认处理阵列控制器（与高级超频模块互斥）。",
   "item.mi_ae2_pattern_provider.quantum_overclock_module.desc2": "包含高级超频模块的全部效果，并额外提供 %s 倍于机器数的并行批次（受输入料量与输出格空间限制，装不下时会自动降倍率而不是丢产物）。",
+  "item.mi_ae2_pattern_provider.guide": "ME样板供应仓手册",
+  "item.mi_ae2_pattern_provider.guide.desc": "右键打开游戏内指南。",
   "config.mi_ae2_pattern_provider.title": "MI AE2 样板供应器",
   "config.mi_ae2_pattern_provider.category.quantum_overclock": "量子超频模块",
   "config.mi_ae2_pattern_provider.parallel_multiplier": "并行倍率",

@@ -24,6 +24,8 @@ public final class SmokeTestAutoStopClient {
 
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
+        // 指南页面只在客户端加载/编译，所以「指南真的能打开、页面真的编译出来了」这条自检挂在这里。
+        SmokeTestAutoStop.clientTickGuideCheck();
         if (SmokeTestAutoStop.tickAndShouldStop()) {
             LOGGER.info("冒烟测试结束：主动关闭客户端（日志无异常即视为通过）");
             Minecraft.getInstance().stop();

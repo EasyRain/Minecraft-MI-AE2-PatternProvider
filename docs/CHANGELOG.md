@@ -2,6 +2,79 @@
 
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [1.2.1] - 2026-10-06
+
+### 新增
+
+- **游戏内指南书（GuideME，中英双语）**：新增物品「**使用手册**」（`mi_ae2_pattern_provider:guide`，工作台无序合成 =
+  「MI 指南书 + 任意颜色玻璃线缆」，也直接列在 **MI 创造栏里 MI 指南书的旁边**）。
+  右键打开的是 **MI 自己的指南书**（`modern_industrialization:book`）并**直接翻到本 mod 章节** —— 侧栏就是 MI 那一整套
+  （序言 / 蒸汽时代 / 电气时代 / 游戏中期 / 游戏终局 / Industrialization Overdrive / **ME样板供应仓**），
+  与 Industrialization Overdrive 的并入方式一致，而不是一本只装我们页面的小册子。
+  MI 的指南书用**内容目录名**（`Guide#getContentRootFolder() == "mi_guidebook"`）查找、不硬编码指南 id；
+  万一找不到（MI 改了目录名）会打 WARN 并退回本 mod **自己注册的那一本**（保留为兜底，内容不至于没得看）。
+  正文共 **8 页**，中英各一份（中文放在 GuideME 约定的 `guide/_zh_cn/`，按游戏语言切换、缺页回落英文）：
+  总览、快速上手（含 `<MultiblockShape>` 直接渲染的处理阵列结构化场景）、供应仓本体（槽位 / 两个界面 / 容量策略 /
+  自动命名 / 在线状态）、样板与自动合成、「一个阵列只能一个仓」的原因、扩展供应仓（分页与扩容卡）、升级卡
+  （频道卡 / 感应卡重定向 / 虚拟合成卡剔除 / 与效率类 mod 的关系）、超频模块（高级 + 量子：并行、配置、16× 取值依据、
+  会被倍率同比例放大的上游瑕疵）、疑难排查（按游戏里实际症状写的对照表）。
+  手册贴图沿用本 mod 的既有做法：拿 MI 原版「MI 指南书」贴图**只做色相映射**（黄相 48° → AE2 福鲁伊克斯紫相 268°，
+  饱和度同时对到福鲁伊克斯的 0.55），书页是纯灰所以一点不动 ⇒ 与 MI 自己的手册画风统一、只有配色不同。
+  指南注册走 `MiAe2Guide.init()`（mod 构造函数里 `Guide.builder(...)`），并挂上 MI 的 `MultiblockShapeCompiler`
+  与 tesseract 的标签包（与 EI 的 `EI#setupGuide` 同款）。
+- **同一套正文并进 MI 的指南书（侧栏多一个「ME样板供应仓」章节）**：MI 的指南用 `folder("mi_guidebook")` 注册，而
+  GuideME 读页面是「**任意命名空间**下的这个目录」（官方文档原话：Pages for a guidebook are read from all resource packs
+  across all namespace）—— IO 就是这么并进 MI 指南书的。我们把自己那套页面镜像到**自己命名空间**下的
+  `assets/mi_ae2_pattern_provider/mi_guidebook/`：页面 id 仍是 `mi_ae2_pattern_provider:<页名>`（放到 MI 命名空间会与
+  MI 自己的 `index.md` 之类**撞 id**），页内省略命名空间的物品 id 也仍按我们自己的命名空间解析 ⇒ 与自带指南那一份
+  **完全相同**。根页面导航位置 **100**（MI 原版 0–4、IO 99）。
+  **正文只维护一份**：这份拷贝由 `build.gradle` 的 `processResources` 从 `guides/…/guide/` 生成，仓库里没有第二份正文。
+  配方显示刻意只用**原版工作台配方**的精确 id（`<Recipe id="..._asbl" />`）：MI 组装机 / EAEP 水晶装配器这些自定义
+  配方类型需要 `RecipeTypeMappingSupplier`，MI / EI 都没提供，写上去只会得到「找不到配方」的红框；差异改用文字说明。
+
+### 修复
+
+- **可选 mod 缺席时指南页面会报红（用户 m 提问「GuideME 里用了非常多可选 mod 的素材，那些 mod 没装是否会显示错误」）**：
+  查证结论是**会**——GuideME 21.1.17 的 `<ItemImage>` / `<ItemLink>` / `<BlockImage>` 都走
+  `MdxAttrs#getRequiredItemAndId`，物品在注册表里查不到就直接 `appendError(...)` 在页面上画一段红色错误文字，
+  **没有任何 fallback / optional 机制**（官方文档里那个 `ItemLink fallback="text"` 在这个版本并不存在：
+  `fallback` 字面量只出现在 `RecipeCompiler` 的 `fallbackText` 里）。
+  所以把页面里所有**可能不存在**的引用改成正文：① ExtendedAE 的样板供应器升级 / 水晶装配器 / 扩展样板供应器；
+  ② ExtendedAE-Plus 的频道卡 / 扩容卡 / 虚拟合成卡；③ AppliedFlux 的感应卡；④ **本 mod 自己的扩展仓方块**
+  （它只在装了 ExtendedAE 时才注册，属「命名空间必需、但 id 条件注册」）；⑤ 这些页面的**导航图标**也从条件注册 /
+  可选 mod 的物品换成必然存在的（`ae2:pattern_provider` 等）。`item_ids` 里的扩展仓 id 保留 —— 那只是索引，
+  查不到无害，装了 ExtendedAE 时反而让悬浮键可用。
+  验证三层：① **诱饵**——故意塞回一个 `<ItemImage id="appflux:induction_card" />`，自检在两个落点都报红并点名；
+  ② **真缺席**——把 `extendedae_plus` 与 `AppliedFlux` 移出 `run/mods` 后双端自检仍全绿（物品存在性按**当时真实注册表**
+  校验，所以这条同时证明页面里已没有任何可选 mod 的引用）；③ 恢复后全绿。
+- **「只装必需 mod」的完整验证（用户 m 追加「不止 EAEP，EAE 也是可选的」）**：把 ExtendedAE、Glodium、ExtendedAE-Plus、
+  AppliedFlux、Industrialization Overdrive 全部移出（连 `build.gradle` 里那两条 `localRuntime` 也临时注释掉），
+  只留 MI / EI / AE2 / tesseract / guideme 跑 `runServer` + `runClient`：**零 ❌**、14 条自检全绿，其中
+  `✅ 指南自检通过（资源层）…112 个物品/配方 id 全部存在`、`✅ 并入 MI 指南书自检通过`。
+  （顺带一个**整合包层面**的事实：`AppliedFlux 1.21-2.1.6` **硬依赖 ExtendedAE** —— 少了 ExtendedAE 时它会让整个游戏
+  在 mod 加载阶段就崩，与本 mod 无关，但做这类验证时得把它一起去掉。）
+
+### 内部
+
+- **新增冒烟自检「指南」**（`SmokeTestAutoStop#assertGuide` / `#clientTickGuideCheck` / `#checkMergedIntoMiGuide`），
+  钉住三层：① **资源层**（专用服可查）——指南已在 GuideME 注册、「使用手册」物品在本 mod 命名空间、
+  8 页正文 + 8 页 `_zh_cn` 翻译共 16 个文件在**两个落点**（自带指南 `guides/…` 与并入 MI 指南书的 `mi_guidebook`）都在，
+  且页面里引用的每个物品 / 配方 / 导航图标 id **都真的存在**；② **页面编译层**（客户端）——`getPages()` 能读出本 mod 的
+  8 页，且 **MI 的指南书里也编译出了这 8 页**、手册的深链页面 `mi_ae2_pattern_provider:index.md` 确实存在
+  （GuideME **只在客户端**加载/编译页面，专用服上 `getPages()` 会抛 `Pages are not loaded yet.`，所以这一层挂在
+  `SmokeTestAutoStopClient` 上、每 tick 重试直到可读）；③ 专用服侧页面校验走 `-Dguideme.validateAtStartup=…`。
+  另外加了**守卫**：页面标签只允许引用**必然存在**的 id —— 命名空间白名单（`minecraft` / `ae2` /
+  `modern_industrialization` / `extended_industrialization` / 本 mod）+ 条件注册 id 黑名单（扩展仓），
+  谁再把可选 mod 的 id 写进标签就直接变红并提示「请改成正文」。
+- **自检不再因可选 mod 缺席而假报警**：① `assertRecipesLoaded` 学会「条件配方」——水晶装配器那条配方带
+  `neoforge:conditions`（`mod_loaded: extendedae`），没装 ExtendedAE 时它**本来就不该**在配方管理器里，
+  现在记成「按条件跳过」并在通过日志里点名；② `runInductionRetargetSelfCheck` 先判断 AppliedFlux 在不在，
+  缺席时记为正常降级（以前会把 `ClassNotFoundException` 当成「真机也出错」报红）。
+  配方自检也自动覆盖到新增的 `guide.json`（现在共 **7 个**配方文件）。
+- **文档口径修正**：README 交互表里的扳手标签原本写成 `#modern_industrialization:wrenches`（并不存在），
+  实际 MI 用的是**公共标签** `c:tools/wrench`（`MITags.item(...)` 固定挂在 `c` 命名空间）—— 也就是说
+  **任意**加入了公共扳手标签的扳手（MI 自己的、以及绝大多数 mod 的扳手）都能打开 MI 槽位界面；指南页面同此口径。
+
 ## [1.2.0] - 2026-10-04
 
 ### 新增

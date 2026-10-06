@@ -32,6 +32,19 @@ public final class ModItems {
             "quantum_overclock_module",
             () -> new QuantumOverclockModuleItem(new Item.Properties()));
 
+    /**
+     * 「使用手册」：右键打开本 mod 自己的 GuideME 指南书（正文在
+     * {@code assets/mi_ae2_pattern_provider/guides/mi_ae2_pattern_provider/guide/} 下）。
+     *
+     * <p>之所以要一个自己的物品、而不是把页面塞进 MI / AE2 的指南：MI 与 AE2 的指南是各自的
+     * {@code Guide}，本 mod 的页面自成一本（与 EI 的做法一致），玩家拿到的入口也就明确。
+     * 指南 id 与物品 id 同名（{@code mi_ae2_pattern_provider:guide}），两者是不同的注册表，不冲突
+     * —— AE2 的 {@code ae2:guide} 也是这个写法。
+     */
+    public static final DeferredItem<Item> GUIDE = ITEMS.register(
+            "guide",
+            () -> new GuideBookItem(new Item.Properties()));
+
     private ModItems() {
     }
 }

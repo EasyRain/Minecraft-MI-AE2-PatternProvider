@@ -7,6 +7,7 @@ import com.miae2.ae.MePatternProviderUpgrades;
 import com.miae2.client.MiAe2ConfigScreen;
 import com.miae2.compat.MeProviderTopPlugin;
 import com.miae2.config.MiAe2Config;
+import com.miae2.guide.MiAe2Guide;
 import com.miae2.items.ModItems;
 import com.miae2.machines.blockentities.MePatternProviderBlockEntity;
 import com.miae2.machines.init.ModHatches;
@@ -59,6 +60,9 @@ public class MiAe2PatternProvider {
     public MiAe2PatternProvider(IEventBus modEventBus, ModContainer modContainer) {
         ModHatches.init();
         ModItems.ITEMS.register(modEventBus);
+        // 本 mod 自己的 GuideME 指南书（「使用手册」物品右键打开它）。与 EI / MI 一样在构造函数里注册：
+        // 页面本身是资源，注册只是把「指南 id → 页面目录」这条映射登记进 GuideME。
+        MiAe2Guide.init();
         // 配置（量子超频模块的并行倍率）。用 COMMON 而不是 SERVER：这个值只被服务端机器 tick 读，
         // COMMON 在两端都保证「已加载」，而 SERVER 配置在未连接服务器的客户端上读会抛异常。
         modContainer.registerConfig(ModConfig.Type.COMMON, MiAe2Config.SPEC);
@@ -138,19 +142,25 @@ public class MiAe2PatternProvider {
     }
 
     /**
-     * 把两个超频模块插进 MI 创造栏里「原版超频模块」的正后方（视觉上是 原版 → 高级 → 量子）。
+     * 把「使用手册」插在 MI 自己的「MI 指南书」旁边（栏里第一格），两个超频模块插在「原版超频模块」后面
+     * （视觉上是 原版 → 高级 → 量子）。
      *
-     * <p>NeoForge 先跑完 MI 自己的 {@code displayItems} 再派发本事件，所以 {@code MIItem.OVERDRIVE_MODULE}
-     * 已经作为锚点存在；万一将来 MI 换栏/换物品导致锚点不在，就退回追加到栏尾——这只是一条便利性代码，
+     * <p>手册贴着 MI 指南书放是因为两者是一类东西（都是翻阅用的书），而栏尾要往下翻才看得到 ——
+     * 用户实测反馈「放在 MI 手册的边上而不是需要往下面翻找」。
+     *
+     * <p>NeoForge 先跑完 MI 自己的 {@code displayItems} 再派发本事件，所以两个锚点都应该在位；
+     * 万一将来 MI 换栏/换物品导致锚点不在，就退回追加到栏尾——这只是一条便利性代码，
      * 任何情况下都不该把游戏搞崩。
      */
     private static void onBuildCreativeTabContents(BuildCreativeModeTabContentsEvent event) {
         if (!MI_GENERAL_TAB.equals(event.getTabKey())) {
             return;
         }
-        ItemStack anchor = MIItem.OVERDRIVE_MODULE.stack();
-        // 两次都贴着同一个锚点插：先插的会被后插的顶到后面，于是顺序是 锚点 → 高级 → 量子，
+        // 手册贴着 MI 指南书
+        insertAfterOrAppend(event, MIItem.GUIDE_BOOK.stack(), new ItemStack(ModItems.GUIDE.get()));
+        // 两个模块仍贴着原版超频模块插：先插的会被后插的顶到后面，于是顺序是 原版 → 高级 → 量子，
         // 而且不依赖「上一次插入是否立刻在 parentEntries 里可见」这种实现细节。
+        ItemStack anchor = MIItem.OVERDRIVE_MODULE.stack();
         insertAfterOrAppend(event, anchor, new ItemStack(ModItems.QUANTUM_OVERCLOCK_MODULE.get()));
         insertAfterOrAppend(event, anchor, new ItemStack(ModItems.ADVANCED_OVERCLOCK_MODULE.get()));
     }

@@ -27,18 +27,29 @@ import appeng.api.stacks.GenericStack;
 import appeng.api.stacks.KeyCounter;
 import com.miae2.api.QuantumParallelHost;
 import com.miae2.config.MiAe2Config;
+import com.miae2.guide.MiAe2Guide;
 import com.miae2.items.ModItems;
 import com.miae2.items.OverclockModules;
 import com.miae2.items.OverclockSlotGate;
 import com.miae2.machines.blockentities.MePatternProviderBlockEntity;
 import com.miae2.machines.init.ModHatches;
 import com.mojang.logging.LogUtils;
+import guideme.Guide;
+import guideme.Guides;
+import guideme.compiler.ParsedGuidePage;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.HolderLookup;
@@ -94,6 +105,49 @@ public final class SmokeTestAutoStop {
     /** 找「普通机器」时最多试放多少个 MI 方块实体方块（找不到就报未覆盖，不静默跳过）。 */
     private static final int MAX_PLAIN_MACHINE_TRIES = 40;
 
+    /** 指南正文页（不含 `.md`）——中英各一份，{@link #assertGuide} 据此逐个核对。 */
+    private static final List<String> GUIDE_PAGES = List.of(
+            "index", "getting-started", "hatch", "patterns",
+            "extended-hatch", "upgrade-cards", "overclock-modules", "troubleshooting");
+
+    /** 客户端等指南页面加载的上限（tick）。几百 tick 足够资源重载跑完，超了就报错而不是无限等。 */
+    private static final int GUIDE_CLIENT_MAX_ATTEMPTS = 400;
+
+    /** 指南页面里 {@code <Recipe id="...">} 引用的**配方 id**。 */
+    private static final Pattern GUIDE_RECIPE_REF =
+            Pattern.compile("<Recipe\\s+id=\"([^\"]+)\"");
+
+    /** 指南页面里引用**物品/方块 id** 的那些标签（{@code RecipeFor} 系列按 GuideME 语义收的也是物品 id）。 */
+    private static final Pattern GUIDE_ITEM_REF =
+            Pattern.compile("<(?:ItemImage|ItemLink|BlockImage|ItemIcon|RecipeFor|RecipesFor)\\s+id=\"([^\"]+)\"");
+
+    /** frontmatter 里的导航图标（也是物品 id）。 */
+    private static final Pattern GUIDE_ICON_REF =
+            Pattern.compile("(?m)^\\s*icon:\\s*\"?([A-Za-z0-9_:/.-]+?)\"?\\s*$");
+
+    /** 数据文件里 {@code neoforge:mod_loaded} 条件的 modid（只在前者出现过时才用，见 {@link #unmetModCondition}）。 */
+    private static final Pattern MOD_LOADED_MODID =
+            Pattern.compile("\"modid\"\\s*:\\s*\"([a-z0-9_]+)\"");
+
+    /**
+     * 指南页面里只允许引用「**任何情况下都存在**」的 id。这些命名空间对应本 mod 的硬依赖（或本 mod 自己），
+     * 可选 mod 的东西必须写成正文。
+     *
+     * <p>为什么：GuideME 21.x 的 {@code <ItemImage>} / {@code <ItemLink>} / {@code <BlockImage>} 对缺失物品
+     * **没有任何降级**（{@code MdxAttrs#getRequiredItemAndId} 查不到就直接 {@code appendError} 画一段红色错误文字，
+     * 官方文档里那个 {@code fallback="text"} 在这个版本并不存在）⇒ 玩家少装一个可选 mod，指南里就是一片报红。
+     */
+    private static final Set<String> GUIDE_ALWAYS_PRESENT_NAMESPACES = Set.of(
+            "minecraft", "ae2", "modern_industrialization", "extended_industrialization",
+            com.miae2.MiAe2PatternProvider.MOD_ID);
+
+    /**
+     * 「命名空间是必需的、但这个 id 本身是条件注册的」——目前只有扩展仓：它只在装了 ExtendedAE 时才注册，
+     * 所以任何页面标签都不能引用它（正文里提名字没问题，{@code item_ids} 里挂着也无害 —— 索引只是查不到）。
+     */
+    private static final Set<String> GUIDE_CONDITIONAL_IDS = Set.of(
+            "modern_industrialization:me_extended_pattern_provider_hatch");
+
     private static final Logger LOGGER = LogUtils.getLogger();
 
     private static boolean enabled;
@@ -101,6 +155,9 @@ public final class SmokeTestAutoStop {
     private static boolean fired;
     private static boolean selfCheckDone;
     private static boolean capacityCheckDone;
+    private static boolean guideCheckDone;
+    private static boolean clientGuideChecked;
+    private static int clientGuideAttempts;
     private static boolean patternCheckSetupDone;
     private static boolean patternCheckAsserted;
     @Nullable
@@ -233,6 +290,10 @@ public final class SmokeTestAutoStop {
             capacityCheckDone = true;
             runCapacityPreservationSelfCheck(server);
         }
+        if (!guideCheckDone) {
+            guideCheckDone = true;
+            assertGuide(server);
+        }
         if (overworld != null && !patternCheckSetupDone) {
             patternCheckSetupDone = true;
             setupPatternRegistrationCheck(overworld);
@@ -349,13 +410,19 @@ public final class SmokeTestAutoStop {
      * <p>做法：用资源管理器列出本 mod 命名空间下 {@code data/mi_ae2_pattern_provider/recipe/} 的<b>所有</b>文件，
      * 逐个到 {@code RecipeManager#byKey} 里查——文件在、配方不在，就是这个文件没解析成功。这样以后新增或改名
      * 配方都不用维护清单，谁写坏 JSON 谁就把冒烟测试弄红。
+     *
+     * <p><b>条件配方不算缺席</b>：本 mod 有一条配方带 {@code neoforge:conditions}（水晶装配器那条依赖 ExtendedAE），
+     * 那个 mod 没装时配方<b>本来就不该在</b>配方管理器里（连结果物品都不存在）。所以这里会先读文件，若它声明了
+     * {@code neoforge:mod_loaded} 且那个 mod 确实没装，就记成「按条件跳过」而不是缺失；条件满足时照旧要求在场。
      */
     private static void assertRecipesLoaded(MinecraftServer server) {
         try {
             Map<ResourceLocation, Resource> files = server.getResourceManager().listResources(
                     "recipe", file -> file.getNamespace().equals(com.miae2.MiAe2PatternProvider.MOD_ID));
-            List<String> missing = new java.util.ArrayList<>();
-            for (ResourceLocation file : files.keySet()) {
+            List<String> missing = new ArrayList<>();
+            List<String> conditionallySkipped = new ArrayList<>();
+            for (Map.Entry<ResourceLocation, Resource> entry : files.entrySet()) {
+                ResourceLocation file = entry.getKey();
                 // 配方 id = 文件相对 data/<ns>/recipe/ 的完整路径（**子目录也算进 id**）：
                 // 所以只去掉最外层的 "recipe/"，不能只取最后一段（crystal_assembler/xxx.json 的 id 是
                 // mi_ae2_pattern_provider:crystal_assembler/xxx，写成 mi_ae2_pattern_provider:xxx 会误报）。
@@ -368,7 +435,13 @@ public final class SmokeTestAutoStop {
                     name = name.substring(0, name.length() - ".json".length());
                 }
                 ResourceLocation recipeId = ResourceLocation.fromNamespaceAndPath(file.getNamespace(), name);
-                if (server.getRecipeManager().byKey(recipeId).isEmpty()) {
+                if (server.getRecipeManager().byKey(recipeId).isPresent()) {
+                    continue;
+                }
+                String unmetMod = unmetModCondition(entry.getValue());
+                if (unmetMod != null) {
+                    conditionallySkipped.add(recipeId + "（条件 neoforge:mod_loaded " + unmetMod + " 未满足）");
+                } else {
                     missing.add(recipeId + "（文件 " + file + " 未解析成功）");
                 }
             }
@@ -377,8 +450,10 @@ public final class SmokeTestAutoStop {
                                 + "（data/{}/recipe/ 这个路径是不是变了？）",
                         com.miae2.MiAe2PatternProvider.MOD_ID, com.miae2.MiAe2PatternProvider.MOD_ID);
             } else if (missing.isEmpty()) {
-                LOGGER.info("冒烟测试：✅ 配方加载自检通过——本 mod 的 {} 个配方文件全部解析成功并进入配方管理器",
-                        files.size());
+                LOGGER.info("冒烟测试：✅ 配方加载自检通过——本 mod 的 {} 个配方文件全部解析成功并进入配方管理器{}",
+                        files.size(),
+                        conditionallySkipped.isEmpty() ? "" : "；另有 " + conditionallySkipped.size()
+                                + " 个按条件跳过（对应 mod 没装，属预期）：" + conditionallySkipped);
             } else {
                 LOGGER.error("冒烟测试：❌ 配方加载自检失败——{} 个配方文件里有 {} 个没进配方管理器"
                                 + "（解析失败在游戏里只留一行 ERROR 日志，物品就是合不出来）：{}",
@@ -386,6 +461,32 @@ public final class SmokeTestAutoStop {
             }
         } catch (Throwable t) {
             LOGGER.error("冒烟测试：❌ 配方加载自检抛异常", t);
+        }
+    }
+
+    /**
+     * 读一个数据文件，若它带 {@code neoforge:mod_loaded} 条件、且那个 mod 没装，返回那个 modid；否则返回 null。
+     *
+     * <p>只做「文件里出现过 {@code neoforge:mod_loaded}」才去抠 {@code "modid"} 的宽松匹配 —— 精确解析 JSON
+     * 不值得，而这条路径只服务于本 mod 自己那几条配方的条件判断（写错的话会以「缺失配方」的形式报红，不会静默通过）。
+     */
+    @Nullable
+    private static String unmetModCondition(Resource resource) {
+        try (var in = resource.open()) {
+            String json = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            if (!json.contains("neoforge:mod_loaded")) {
+                return null;
+            }
+            Matcher matcher = MOD_LOADED_MODID.matcher(json);
+            while (matcher.find()) {
+                String modId = matcher.group(1);
+                if (!ModList.get().isLoaded(modId)) {
+                    return modId;
+                }
+            }
+            return null;
+        } catch (IOException e) {
+            return null;
         }
     }
 
@@ -1233,6 +1334,12 @@ public final class SmokeTestAutoStop {
      * （AppliedFlux 是可选依赖，也不往我们产物里塞它的代码）。
      */
     private static void runInductionRetargetSelfCheck(MinecraftServer server) {
+        // AppliedFlux 是可选的：没装它时这条路径根本不存在，跳过即可 —— 否则自检会拿
+        // ClassNotFoundException 当「真机也会出错」报红（2026-10-06 用「临时移走可选 mod」的方法验证指南时踩到）。
+        if (!ModList.get().isLoaded("appflux")) {
+            LOGGER.info("冒烟测试：AppliedFlux 未安装，跳过感应卡重定向自检（该功能不存在，属正常降级）");
+            return;
+        }
         BlockPos hatchPos = new BlockPos(8, 200, 8);
         BlockPos energyPos = new BlockPos(9, 200, 8);
         try {
@@ -1285,6 +1392,325 @@ public final class SmokeTestAutoStop {
             level.setBlock(energyPos, Blocks.AIR.defaultBlockState(), 3);
         } catch (Throwable t) {
             LOGGER.error("冒烟测试：❌ 感应卡能量重定向自检失败（真机上很可能同样出错）", t);
+        }
+    }
+
+    /**
+     * 冒烟测试：确认 GuideME 指南真的注册上了，页面也真的进了指南。
+     *
+     * <p>为什么值得一条自检：指南页面是**纯资源**，写坏了（{@code <ItemLink>} 指向不存在的物品、
+     * 标签拼错、目录不符合 GuideME 的 {@code guides/<命名空间>/<路径>} 约定、翻译目录名写错）在游戏里
+     * 既不崩也不刷日志，只是「那一页空白或报红」，只有人肉点进去才可能发现。
+     *
+     * <p>这里做两件事：
+     * <ul>
+     *   <li><b>资源层</b>：八页正文 + 八页 {@code _zh_cn} 翻译文件都在（漏页/改名立刻红），而且
+     *       <b>两个落点</b>都要在 —— 本 mod 自己的指南书（{@code guides/<命名空间>/guide/}）与镜像给
+     *       **MI 指南书**的那份（{@code mi_guidebook/}，由 {@code build.gradle} 的 {@code processResources}
+     *       从前者拷出，仓库里只维护一份正文）；顺带核对「使用手册」物品确实注册在本 mod 命名空间下，
+     *       以及页面里引用的每个物品 / 配方 id 都真的存在。</li>
+     *   <li><b>GuideME 层</b>：页面确实被编译进指南（目录或注册方式被改坏立刻红）。注意 GuideME
+     *       <b>只在客户端</b>加载/编译页面（专用服上 {@code getPages()} 会抛 {@code Pages are not loaded yet.}），
+     *       所以这一层在专用服上由启动参数 {@code -Dguideme.validateAtStartup=mi_ae2_pattern_provider:guide}
+     *       校验，在客户端由 {@link #clientTickGuideCheck()} 校验；本方法只做资源层 + 注册层。</li>
+     * </ul>
+     */
+    private static void assertGuide(MinecraftServer server) {
+        try {
+            Guide guide = Guides.getById(MiAe2Guide.ID);
+            if (guide == null) {
+                LOGGER.error("冒烟测试：❌ 指南自检失败——GuideME 里查不到指南 {}"
+                                + "（MiAe2Guide.init() 没跑到，或指南 id 被改了）", MiAe2Guide.ID);
+                return;
+            }
+
+            List<String> missingFiles = new ArrayList<>();
+            // 页面里引用的每个物品 / 配方 id 都要真的存在：写错 id 在游戏里只是那一行报红，
+            // 既不崩也不刷日志，正好是自检该管的事。
+            List<String> badRefs = new ArrayList<>();
+            int refCount = 0;
+            for (String root : guideRoots()) {
+                for (String name : GUIDE_PAGES) {
+                    for (String prefix : List.of("", "_zh_cn/")) {
+                        String path = root + prefix + name + ".md";
+                        String text = readGuidePage(path);
+                        if (text == null) {
+                            missingFiles.add(path);
+                            continue;
+                        }
+                        for (String raw : findAll(GUIDE_RECIPE_REF, text)) {
+                            refCount++;
+                            ResourceLocation ref = guideRelative(raw);
+                            if (server.getRecipeManager().byKey(ref).isEmpty()) {
+                                badRefs.add(path + " 引用的配方不存在：" + ref);
+                            }
+                        }
+                        for (String raw : findAll(GUIDE_ITEM_REF, text)) {
+                            refCount++;
+                            ResourceLocation ref = guideRelative(raw);
+                            if (!isKnownItemOrBlock(ref)) {
+                                badRefs.add(path + " 引用的物品不存在：" + ref);
+                            } else {
+                                String optionalProblem = optionalRefProblem(ref);
+                                if (optionalProblem != null) {
+                                    badRefs.add(path + " " + optionalProblem);
+                                }
+                            }
+                        }
+                        for (String raw : findAll(GUIDE_ICON_REF, text)) {
+                            refCount++;
+                            ResourceLocation ref = guideRelative(raw);
+                            if (!isKnownItemOrBlock(ref)) {
+                                badRefs.add(path + " 的导航图标不是物品：" + ref);
+                            } else {
+                                String optionalProblem = optionalRefProblem(ref);
+                                if (optionalProblem != null) {
+                                    badRefs.add(path + " 的导航图标" + optionalProblem);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Item item = ModItems.GUIDE.get();
+            ResourceLocation itemId = BuiltInRegistries.ITEM.getKey(item);
+            boolean itemOk = itemId.equals(ResourceLocation.fromNamespaceAndPath(
+                    com.miae2.MiAe2PatternProvider.MOD_ID, "guide"));
+
+            Set<String> compiled = compiledPageNames(guide);
+            List<String> missingPages = new ArrayList<>();
+            if (compiled != null) {
+                for (String name : GUIDE_PAGES) {
+                    if (!compiled.contains(name)) {
+                        missingPages.add(name);
+                    }
+                }
+            }
+
+            if (!missingFiles.isEmpty() || !badRefs.isEmpty() || !itemOk
+                    || (compiled != null && !missingPages.isEmpty())) {
+                LOGGER.error("冒烟测试：❌ 指南自检失败——手册物品={}（应为 {}:guide）、缺失页面文件={}、"
+                                + "页面里引用不到的 id={}、GuideME 未编译出的页={}、实际编译出={}",
+                        itemId, com.miae2.MiAe2PatternProvider.MOD_ID, missingFiles, badRefs,
+                        missingPages, compiled);
+            } else if (compiled == null) {
+                LOGGER.info("冒烟测试：✅ 指南自检通过（资源层）——指南 {} 已注册，手册物品 {} 就位，"
+                                + "{} 页正文 + _zh_cn 翻译共 {} 个页面文件在两个落点（自带指南 guides/… + 并入 MI 指南书的 {}）齐全，"
+                                + "页面里 {} 个物品/配方 id 全部存在；GuideME 只在客户端编译页面，本端用 -Dguideme.validateAtStartup 校验页面本身",
+                        MiAe2Guide.ID, itemId, GUIDE_PAGES.size(), GUIDE_PAGES.size() * 2, MiAe2Guide.MI_GUIDE_FOLDER, refCount);
+            } else {
+                LOGGER.info("冒烟测试：✅ 指南自检通过——指南 {} 已注册，手册物品 {} 就位，"
+                                + "{} 页正文 + _zh_cn 翻译共 {} 个页面文件在两个落点（自带指南 guides/… + 并入 MI 指南书的 {}）齐全，"
+                                + "页面里 {} 个物品/配方 id 全部存在，GuideME 编译出 {} 页：{}",
+                        MiAe2Guide.ID, itemId, GUIDE_PAGES.size(), GUIDE_PAGES.size() * 2, MiAe2Guide.MI_GUIDE_FOLDER, refCount,
+                        guide.getPages().size(), compiled);
+            }
+        } catch (Throwable t) {
+            LOGGER.error("冒烟测试：❌ 指南自检执行出错", t);
+        }
+    }
+
+    /**
+     * 指南正文的两个落点（classloader 路径前缀）。
+     *
+     * <p>① 本 mod 自己的指南书：GuideME 的默认约定 {@code guides/<指南 id 命名空间>/<指南 id 路径>/}；
+     * ② 镜像给 **MI 指南书**的那一份：MI 的指南 folder 是 {@code mi_guidebook}，而 GuideME 会读
+     * <b>任意命名空间</b>下的这个目录（Industrialization Overdrive 就是这么并进 MI 指南书的），
+     * 我们放在自己的命名空间下 ⇒ 页面 id 与页内省略命名空间的物品 id 都与①完全一致。
+     * 这份拷贝由 {@code build.gradle} 的 {@code processResources} 从①生成，仓库里只有一份正文。
+     */
+    private static List<String> guideRoots() {
+        String namespace = MiAe2Guide.ID.getNamespace();
+        return List.of(
+                "assets/" + namespace + "/guides/" + namespace + "/" + MiAe2Guide.ID.getPath() + "/",
+                "assets/" + namespace + "/" + MiAe2Guide.MI_GUIDE_FOLDER + "/");
+    }
+
+    /** 抠出一段文本里某个正则第 1 组的所有取值。 */
+    private static List<String> findAll(Pattern pattern, String text) {
+        List<String> found = new ArrayList<>();
+        Matcher matcher = pattern.matcher(text);
+        while (matcher.find()) {
+            found.add(matcher.group(1));
+        }
+        return found;
+    }
+
+    /**
+     * 读一页指南正文，读不到返回 null。
+     *
+     * <p>走 <b>classloader</b> 而不是资源管理器：专用服的资源包只有 {@code data/}（{@code PackType.SERVER_DATA}），
+     * {@code assets/} 下的指南页面在那里查不到 —— 这也正是 GuideME 的页面只在客户端加载的原因。
+     * classloader 在开发环境读 {@code build/resources/main}、正式运行时读 mod jar，两边都拿得到。
+     */
+    @Nullable
+    private static String readGuidePage(String path) {
+        try (var in = MiAe2Guide.class.getResourceAsStream("/" + path)) {
+            return in == null ? null : new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /** 页面里省略命名空间的 id 按指南自己的命名空间解析（GuideME 的规则）。 */    private static ResourceLocation guideRelative(String raw) {
+        return raw.indexOf(':') >= 0
+                ? ResourceLocation.parse(raw)
+                : ResourceLocation.fromNamespaceAndPath(MiAe2Guide.ID.getNamespace(), raw);
+    }
+
+    /** 注册表里有没有这个物品或方块（{@code BlockImage} 收的是方块 id，而方块一般也有对应物品）。 */
+    private static boolean isKnownItemOrBlock(ResourceLocation id) {
+        return BuiltInRegistries.ITEM.containsKey(id) || BuiltInRegistries.BLOCK.containsKey(id);
+    }
+
+    /**
+     * 这个 id 会不会「现在有、别人没装可选 mod 时就没有」——有的话返回一句给人看的说明，否则返回 null。
+     *
+     * <p>两种情形：① 命名空间属于可选 mod（ExtendedAE / ExtendedAE-Plus / AppliedFlux …）；
+     * ② 命名空间是硬依赖、但这个 id 是条件注册的（扩展仓依赖 ExtendedAE）。
+     */
+    @Nullable
+    private static String optionalRefProblem(ResourceLocation id) {
+        if (GUIDE_CONDITIONAL_IDS.contains(id.toString())) {
+            return "引用了条件注册的 id（" + id + " —— 没装 ExtendedAE 时它不存在，页面会报红）";
+        }
+        if (!GUIDE_ALWAYS_PRESENT_NAMESPACES.contains(id.getNamespace())) {
+            return "引用了可选 mod 的 id（" + id + " —— 没装那个 mod 时页面会报红，请改成正文）";
+        }
+        return null;
+    }
+
+    /** 指南里已编译页面的文件名集合（去掉目录与 {@code .md}）；页面还没加载时返回 null。 */
+    @Nullable
+    private static Set<String> compiledPageNames(Guide guide) {
+        Collection<ParsedGuidePage> pages;
+        try {
+            pages = guide.getPages();
+        } catch (IllegalStateException notLoadedYet) {
+            // GuideME 的页面只在客户端加载；专用服上这里就是「还没加载」。
+            return null;
+        }
+        // 页面 id 的完整形态由 GuideME 决定（可能带目录前缀、可能带 .md），所以只取文件名比对，
+        // 不猜它的完整形式：猜错会让自检假失败。
+        Set<String> compiled = new LinkedHashSet<>();
+        for (ParsedGuidePage page : pages) {
+            String path = page.getId().getPath();
+            int slash = path.lastIndexOf('/');
+            if (slash >= 0) {
+                path = path.substring(slash + 1);
+            }
+            if (path.endsWith(".md")) {
+                path = path.substring(0, path.length() - ".md".length());
+            }
+            compiled.add(path);
+        }
+        return compiled;
+    }
+
+    /**
+     * 客户端自检：我们的 8 页是不是**也进了 MI 自己的指南书**（{@code folder("mi_guidebook")} 的那本），
+     * 以及「使用手册」的深链（{@link MiAe2Guide#INDEX_PAGE}）在那本书里翻得到。
+     *
+     * <p>找 MI 指南书用的是「内容目录名」而不是硬编码指南 id（{@link MiAe2Guide#miBook()}，与手册本身同一套
+     * 逻辑）：这样将来 MI 换指南 id 也不会让自检假失败；但要是 MI 换了**目录名**，那我们并入的页面确实会消失
+     * —— 那时这条自检报红正是我们想要的（手册会退回我们自己那本，不至于没得看）。
+     *
+     * <p>页面只按**文件名**比对（页面 id 的完整形态由 GuideME 决定），但会把匹配到的完整 id 打出来，
+     * 便于确认命名空间真的是我们自己的（{@code mi_ae2_pattern_provider:<页名>}）。
+     */
+    private static void checkMergedIntoMiGuide() {
+        Guide miGuide = MiAe2Guide.miBook();
+        if (miGuide == null) {
+            LOGGER.error("冒烟测试：❌ 并入 MI 指南书自检失败——没有任何指南的内容目录是 {}"
+                            + "（MI 换目录名了？我们的页面就并不过去了，手册会退回本 mod 自己那本）",
+                    MiAe2Guide.MI_GUIDE_FOLDER);
+            return;
+        }
+        Set<String> compiled = compiledPageNames(miGuide);
+        if (compiled == null) {
+            LOGGER.error("冒烟测试：❌ 并入 MI 指南书自检失败——指南 {} 的页面读不出来", miGuide.getId());
+            return;
+        }
+        List<String> missing = new ArrayList<>();
+        for (String name : GUIDE_PAGES) {
+            if (!compiled.contains(name)) {
+                missing.add(name);
+            }
+        }
+        if (!missing.isEmpty()) {
+            LOGGER.error("冒烟测试：❌ 并入 MI 指南书自检失败——MI 指南书（{}，目录 {}）里缺我们的页 {}；"
+                            + "它一共编译出 {} 页（那是 MI 与其它 mod 的页面）",
+                    miGuide.getId(), MiAe2Guide.MI_GUIDE_FOLDER, missing, compiled.size());
+            return;
+        }
+        if (!miGuide.pageExists(MiAe2Guide.INDEX_PAGE)) {
+            LOGGER.error("冒烟测试：❌ 并入 MI 指南书自检失败——页面都在，但手册的深链 {} 在指南 {} 里不存在"
+                            + "（打开手册会落不到我们的首页）",
+                    MiAe2Guide.INDEX_PAGE, miGuide.getId());
+            return;
+        }
+        List<String> ourIds = new ArrayList<>();
+        for (ParsedGuidePage page : miGuide.getPages()) {
+            if (page.getId().getNamespace().equals(MiAe2Guide.ID.getNamespace())) {
+                ourIds.add(page.getId().toString());
+            }
+        }
+        LOGGER.info("冒烟测试：✅ 并入 MI 指南书自检通过——MI 的指南书（{}，目录 {}）里编译出了我们这 {} 页"
+                        + "（手册会直接翻到 {}）：{}",
+                miGuide.getId(), MiAe2Guide.MI_GUIDE_FOLDER, ourIds.size(), MiAe2Guide.INDEX_PAGE, ourIds);
+    }
+
+    /**
+     * 客户端侧的指南自检（由 {@code SmokeTestAutoStopClient} 每 tick 调用）。
+     *
+     * <p>GuideME 只在客户端加载并编译指南页面，所以「页面真的编译出来了」这件事只有这里验证得到；
+     * 页面还没加载好就下一 tick 再试（资源重载在客户端启动早期完成，正常一两次就够）。
+     *
+     * <p>两件事：① 本 mod 自己的指南书编译出我们的 8 页；② **MI 自己的指南书**里也编译出了这 8 页
+     * （并进去的那一份，见 {@link #guideRoots()}）—— 这条只能在这里验证，因为「并入 MI 指南书」是否
+     * 成立完全取决于 GuideME 有没有读到我们那个命名空间下的 {@code mi_guidebook} 目录。
+     */
+    public static void clientTickGuideCheck() {
+        if (clientGuideChecked) {
+            return;
+        }
+        try {
+            Guide guide = Guides.getById(MiAe2Guide.ID);
+            if (guide == null) {
+                clientGuideChecked = true;
+                LOGGER.error("冒烟测试：❌ 指南自检失败（客户端）——GuideME 里查不到指南 {}", MiAe2Guide.ID);
+                return;
+            }
+            Set<String> compiled = compiledPageNames(guide);
+            if (compiled == null || compiled.isEmpty()) {
+                if (++clientGuideAttempts > GUIDE_CLIENT_MAX_ATTEMPTS) {
+                    clientGuideChecked = true;
+                    LOGGER.error("冒烟测试：❌ 指南自检失败（客户端）——等了 {} tick 指南 {} 仍没有编译出任何页面"
+                                    + "（目录不符合 GuideME 的 guides/<命名空间>/<路径> 约定？）",
+                            clientGuideAttempts, MiAe2Guide.ID);
+                }
+                return;
+            }
+            clientGuideChecked = true;
+            List<String> missing = new ArrayList<>();
+            for (String name : GUIDE_PAGES) {
+                if (!compiled.contains(name)) {
+                    missing.add(name);
+                }
+            }
+            if (missing.isEmpty()) {
+                LOGGER.info("冒烟测试：✅ 指南自检通过（客户端页面编译）——指南 {} 编译出 {} 页，"
+                                + "本 mod 的 {} 页正文全部在：{}",
+                        MiAe2Guide.ID, guide.getPages().size(), GUIDE_PAGES.size(), compiled);
+            } else {
+                LOGGER.error("冒烟测试：❌ 指南自检失败（客户端页面编译）——{} 页正文里缺 {}（实际编译出：{}）",
+                        GUIDE_PAGES.size(), missing, compiled);
+            }
+            checkMergedIntoMiGuide();
+        } catch (Throwable t) {
+            clientGuideChecked = true;
+            LOGGER.error("冒烟测试：❌ 指南自检（客户端）执行出错", t);
         }
     }
 

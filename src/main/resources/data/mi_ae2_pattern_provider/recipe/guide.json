@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [
+    {
+      "item": "modern_industrialization:guidebook"
+    },
+    {
+      "tag": "ae2:glass_cable"
+    }
+  ],
+  "result": {
+    "id": "mi_ae2_pattern_provider:guide",
+    "count": 1
+  }
+}

@@ -103,6 +103,10 @@ dependencies {
     // （Jade 走 Maven 是因为 CC-BY-NC-SA 不允许再分发，Cloth Config 没有这个问题）。
     // 只做编译期链接 + dev 运行时：产物里只有接口名引用，没装它的玩家一切照旧。
     compileOnly files("libs/cloth-config-15.0.140-neoforge.jar")
+    // GuideME：本 mod 自己的指南书（MiAe2Guide）+「使用手册」物品（GuideBookItem）用它注册/打开。
+    // 它是 MI / EI / AE2 共同的硬依赖（EI 硬依赖 guideme、AE2 硬依赖 guideme），所以运行期一定在；
+    // 这里只需要编译期链接（与上面几个 compileOnly 同理）。
+    compileOnly files("libs/guideme-21.1.17.jar")
 
     // Runtime for dev runClient (copied into run/mods).
     localRuntime files("libs/Modern-Industrialization-2.5.6.jar")
@@ -150,6 +154,20 @@ tasks.named('processResources', ProcessResources).configure {
 
     filesMatching(['META-INF/neoforge.mods.toml', 'pack.mcmeta']) {
         expand replaceProperties + [project: project]
+    }
+}
+
+// 指南正文只维护一份，构建时再镜像一份给 **MI 自己的指南书**。
+//
+// MI 的指南用 `MIGuide.ID = modern_industrialization:book` + `folder("mi_guidebook")` 注册，而 GuideME 读页面是
+// 「任意命名空间下的这个目录」（官方文档：Pages for a guidebook are read from all resource packs across all
+// namespace）—— Industrialization Overdrive 就是这么把 `assets/modern_industrialization/mi_guidebook/io_guide.md`
+// 并进 MI 指南书侧栏的（position 99）。我们放在**自己的命名空间**下，于是页面 id 仍是
+// `mi_ae2_pattern_provider:<页名>`，既不会撞上 MI 自己的 `modern_industrialization:<页名>`，页内省略命名空间的
+// 物品 id 也仍然按我们自己的命名空间解析 ⇒ 与自带指南的那一份**逐字节相同**，两边同时生效。
+tasks.named('processResources', ProcessResources).configure {
+    from('src/main/resources/assets/mi_ae2_pattern_provider/guides/mi_ae2_pattern_provider/guide') {
+        into 'assets/mi_ae2_pattern_provider/mi_guidebook'
     }
 }
 

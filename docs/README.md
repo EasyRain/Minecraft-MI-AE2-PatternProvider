@@ -55,6 +55,22 @@
   多个流体产物共用一个输出槽时，可行性检查不扣减前一个产物的占用；概率产物完全不参与可行性检查；
   `recipeEnergy` 写档用 `putLong`、读档用 `getInt`（配方总 EU × 倍率 > `2^31` 时读档后进度损坏，
   阈值 `总EU > 2^31 / (64 × 倍率)`）。详见 [CHANGELOG](CHANGELOG.md) 的「量子超频模块」与「已知问题（上游）」两节。
+- **游戏内指南书（GuideME，中英双语）**：物品「**使用手册**」（`mi_ae2_pattern_provider:guide`，列在 MI 创造栏里
+  **MI 指南书旁边**）右键打开**MI 自己的指南书**并直接翻到本 mod 章节 —— 与 Industrialization Overdrive 的并入方式
+  一致，侧栏就是 MI 那一整套（序言 / 蒸汽时代 / … / IO / **ME样板供应仓**），不是一本只装我们页面的小册子
+  —— MI 指南书侧栏里会多出一个「ME样板供应仓」章节（`position 100`，排在原版章节与 Industrialization Overdrive
+  之后），所以手里只有 MI 指南书也能看到全部内容；MI 的指南书万一找不到（目录改名），手册会退回本 mod 自己注册的
+  那本，内容不至于没得看。
+  正文 **8 页**：总览、快速上手（内置 `<MultiblockShape>` 直接渲染的处理阵列结构化场景）、供应仓本体、
+  样板与自动合成、扩展供应仓、升级卡、超频模块、疑难排查；中文翻译放在 GuideME 约定的 `_zh_cn/` 目录下，
+  按游戏语言自动切换，缺页回落英文。手册本身可在工作台合成（MI 指南书 + 任意颜色玻璃线缆）。
+  正文**只维护一份**（`guides/mi_ae2_pattern_provider/guide/`），构建时由 `processResources` 镜像到
+  `assets/mi_ae2_pattern_provider/mi_guidebook/` —— MI 的指南 folder 就是 `mi_guidebook`，而 GuideME 会读
+  **任意命名空间**下的这个目录（IO 的 `assets/modern_industrialization/mi_guidebook/io_guide.md` 是同一个套路）。
+  **可选 mod 的内容一律写成正文，不画物品图标**：GuideME 21.x 的 `<ItemImage>` / `<ItemLink>` / `<BlockImage>` 对缺失物品
+  没有任何降级（查不到就直接在页面上画一段红色错误文字，官方文档里的 `fallback="text"` 在这个版本并不存在），
+  所以引用 ExtendedAE / ExtendedAE-Plus / AppliedFlux 的物品、以及只在装了 ExtendedAE 时才注册的「扩展样板供应仓」，
+  都会在玩家少装那个 mod 时报红。这条由冒烟自检的**命名空间白名单 + 条件注册 id 黑名单**钉住（谁再写回去就变红）。
 - **合成表**：玻璃线缆 + 任意等级的物品/流体输入/输出仓 + ME 样板供应器。
 
 ## 交互
@@ -62,7 +78,7 @@
 | 操作 | 打开的界面 |
 |---|---|
 | 空手右键 | AE2 样板供应器界面（放样板） |
-| 手持扳手（`#modern_industrialization:wrenches`）右键 | MI 槽位界面（手动取出卡住的物品/流体） |
+| 手持扳手（`#c:tools/wrench`，公共扳手标签 —— MI 自己的扳手与其它 mod 的扳手都能用）右键 | MI 槽位界面（手动取出卡住的物品/流体） |
 | 手持 `extendedae:pattern_provider_upgrade` + shift 右键（普通仓） | 升级为扩展供应仓 |
 
 ## 配方
@@ -99,6 +115,8 @@
 
   档位对齐说明：既然叫「量子」，材料就走**超导压**档，不再复用高级模块的高压档材料。量子电路本身还很贵（每个需要一张量子电路板 = 12 根超导电缆 + 6 片铱板 + 2 个钚电池 + 50 mB 氦-3，外加 2 量子比特 / 2 处理单元 / 2 冷却单元），所以 2 个量子电路的模块约为 MI 自家 `quantum_upgrade`（8 个量子电路 + 奇异物质 + 50 mB 反物质）的四分之一——是「比高级模块高一整档」而不是直接跳到终局。
 
+- **使用手册**（工作台，无序合成）：MI 指南书 + 任意颜色玻璃线缆（`#ae2:glass_cable`）。
+
 ## 依赖（Minecraft 1.21.1 / NeoForge）
 
 | 依赖 | 版本 | 类型 |
@@ -119,7 +137,7 @@ JDK 21 + Gradle 8.14.3（依赖 jar 已放在 `libs/`，开箱即用）：
 gradlew build
 ```
 
-产物：`build/libs/mi_ae2_pattern_provider-1.2.0-1.21.1.jar`
+产物：`build/libs/mi_ae2_pattern_provider-1.2.1-1.21.1.jar`
 
 ## 许可证
 
@@ -131,12 +149,13 @@ gradlew build
 
 | mod | 许可证 | 集成方式 |
 |---|---|---|
-| [Modern Industrialization](https://github.com/AztechMC/Modern-Industrialization) | MIT | 硬依赖。「高级超频模块」的**贴图由 MI 原版「超频模块」贴图改色而来**（只把蓝色相映射为橙色相，轮廓/明暗/高光均保留）；「量子超频模块」的贴图再对**本 mod 的高级模块贴图**做一次色相映射（橙相 → 紫相，同样只动色相）。按 MIT 署名原作者 AztechMC |
+| [Modern Industrialization](https://github.com/AztechMC/Modern-Industrialization) | MIT | 硬依赖。「高级超频模块」的**贴图由 MI 原版「超频模块」贴图改色而来**（只把蓝色相映射为橙色相，轮廓/明暗/高光均保留）；「量子超频模块」的贴图再对**本 mod 的高级模块贴图**做一次色相映射（橙相 → 紫相，同样只动色相）；「使用手册」的贴图同样由 MI 原版「MI 指南书」贴图改色而来（黄相 → AE2 福鲁伊克斯紫相，只动色相，书页的灰色不动）—— 所以手册与 MI 自己的手册画风一致。按 MIT 署名原作者 AztechMC |
 | [ExtendedAE](https://github.com/GlodBlock/ExtendedAE) | LGPL-3.0 | `compileOnly` 引用其 `ex_pattern_provider` 菜单类型（产物内只有类名引用）；扩展仓的界面与分页由它 + EAEP 提供 |
 | [ExtendedAE-Plus](https://github.com/GaLicn/ExtendedAE_Plus) | LGPL-3.0-or-later | 仅以 mixin 目标（字符串类名）适配其升级槽判定；本 mod 不含其代码，EAEP 缺席或改版时自动降级为「功能不可用但不崩」 |
 | AppliedFlux | LGPL-3.0 | 仅作为可选的升级槽提供方被使用 |
 | [Jade](https://modrinth.com/mod/jade) | CC-BY-NC-SA-4.0 | 悬浮提示插件（`compileOnly`，从 Modrinth Maven 取）。该许可**不允许再分发**，因此它的 jar 既不进产物、也不放进仓库的 `libs/`；未安装 Jade 时该插件不会被加载 |
 | [The One Probe](https://modrinth.com/mod/the-one-probe) | MIT | 悬浮提示插件（`compileOnly`，同样从 Modrinth Maven 取）。走 NeoForge 的 IMC 登记，未安装时该插件不会被加载 |
+| [GuideME](https://github.com/AppliedEnergistics/GuideME) | LGPL-3.0 | 硬依赖（由 EI / AE2 传递引入，无需单独安装）。「使用手册」物品与 8 页指南正文由它提供框架；本 mod 只做编译期链接，产物里只有类名引用，不含它的代码或 jar |
 
 各 mod 的版权归其各自作者所有。若你要二次分发本 mod，请一并遵守上述可选依赖的许可证。
 
