@@ -159,6 +159,25 @@ gradlew build
 
 各 mod 的版权归其各自作者所有。若你要二次分发本 mod，请一并遵守上述可选依赖的许可证。
 
+### 贴图来源与许可（派生素材的署名与改动说明）
+
+本 mod 的部分贴图是**其它 mod 贴图的改件**，逐张列明来源与改动如下。派生自 **LGPL-3.0** 素材的改件继续以 LGPL-3.0 提供（保留原许可、并在此声明已作修改）；派生自 **MIT** 素材的改件继续以 MIT 提供。
+
+| 本 mod 的素材 | 来源 | 改动 | 原许可 |
+|---|---|---|---|
+| `textures/block/me_pattern_provider_hatch.png` | AE2 `block/pattern_provider.png` | 外圈**手工重绘为紫色**（其余像素与原图逐像素相同：掩码 IoU 100%、76.6% 像素一致） | LGPL-3.0 |
+| `textures/block/me_extended_pattern_provider_hatch.png` | ExtendedAE `block/ex_pattern_provider.png` | 同上（同样的手绘外圈） | LGPL-3.0 |
+| `textures/block/me_pattern_provider_hatch_overlay_side.png` | 自有 | 手绘的 16×16 半透明侧面着色覆盖层 | — |
+| `textures/item/advanced_overclock_module.png` | MI `item/overdrive_module.png` | **只做色相/饱和度调整**（掩码 IoU 100%、色相偏移恒定 −172.5°） | MIT |
+| `textures/item/quantum_overclock_module.png` | MI `item/overdrive_module.png` | 同上（色相偏移恒定 +77.9°） | MIT |
+| `textures/item/guide.png` | MI `item/guidebook.png` | 色相/饱和度调整（色相偏移恒定 −139.9°） | MIT |
+| `logo.png`（项目图标 / 配置页横幅） | **本 mod 自己的** `me_pattern_provider_hatch.png` 32× 最近邻放大 | 手工加紫色外框、中部重绘扳手图形（88.2% 像素即那张放大图） | 自有（其底层为上方 AE2 改件） |
+| `guides/…/assets/logo.png`（指南首页图，256×256） | 上面那张 512 `logo.png` | **确定性脚本** Lanczos 降采样（重跑逐像素 0 差异） | 同上 |
+
+> 上游原作者：AE2 — AlgorithmX2 与 Team AppliedEnergistics；ExtendedAE — GlodBlock；Modern Industrialization — AztechMC（以及各自的贡献者）。
+> 产物的贴图**没有任何一张**由生成式 AI（文生图模型）产出：要么是上述手工/机械派生，要么是手绘或确定性脚本变换。
+> 复核脚本：`.ref\tools\python\make_miae2_derivation_sheet.py`（判据 = 相同像素占比 / alpha 掩码 IoU / 色相偏移的恒定性与离散度）。
+
 ### 悬浮提示：显示设备在线状态
 
 供应仓在 **Jade** 和 **The One Probe（TOP）** 里都会显示一行「**设备在线** / **设备离线**」，与 AE2 自家机器（如 ME 接口）的表现一致。
