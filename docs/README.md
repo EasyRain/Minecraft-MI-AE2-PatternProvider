@@ -167,11 +167,11 @@ gradlew build
 |---|---|---|---|
 | `textures/block/me_pattern_provider_hatch.png` | AE2 `block/pattern_provider.png` | 外圈**手工重绘为紫色**（其余像素与原图逐像素相同：掩码 IoU 100%、76.6% 像素一致） | LGPL-3.0 |
 | `textures/block/me_extended_pattern_provider_hatch.png` | ExtendedAE `block/ex_pattern_provider.png` | 同上（同样的手绘外圈） | LGPL-3.0 |
-| `textures/block/me_pattern_provider_hatch_overlay_side.png` | 自有 | 手绘的 16×16 半透明侧面着色覆盖层 | — |
+| `textures/block/me_pattern_provider_hatch_overlay_side.png` | MI `block/machines/hatch_{item,fluid,energy}/overlay_side.png`（仓的侧面 overlay，三种档位形状相同） | **手工改色**（在图像编辑器里改色：alpha 掩码与原图 100% 一致，32 个不透明像素的颜色全部改过） | MIT |
 | `textures/item/advanced_overclock_module.png` | MI `item/overdrive_module.png` | **只做色相/饱和度调整**（掩码 IoU 100%、色相偏移恒定 −172.5°） | MIT |
 | `textures/item/quantum_overclock_module.png` | MI `item/overdrive_module.png` | 同上（色相偏移恒定 +77.9°） | MIT |
 | `textures/item/guide.png` | MI `item/guidebook.png` | 色相/饱和度调整（色相偏移恒定 −139.9°） | MIT |
-| `logo.png`（项目图标 / 配置页横幅） | **本 mod 自己的** `me_pattern_provider_hatch.png` 32× 最近邻放大 | 手工加紫色外框、中部重绘扳手图形（88.2% 像素即那张放大图） | 自有（其底层为上方 AE2 改件） |
+| `logo.png`（项目图标 / 配置页横幅） | **本 mod 自己的** `me_pattern_provider_hatch.png` 32× 最近邻放大；中部为 **MI `item/wrench.png` 原图** | 手工加紫色外框；中部扳手**原图直接使用**、仅手加一圈淡灰描边（88.2% 像素即那张放大图） | 自有（底层为上方 AE2 改件）+ MI **MIT** |
 | `guides/…/assets/logo.png`（指南首页图，256×256） | 上面那张 512 `logo.png` | **确定性脚本** Lanczos 降采样（重跑逐像素 0 差异） | 同上 |
 
 > 上游原作者：AE2 — AlgorithmX2 与 Team AppliedEnergistics；ExtendedAE — GlodBlock；Modern Industrialization — AztechMC（以及各自的贡献者）。
