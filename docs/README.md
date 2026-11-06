@@ -2,6 +2,12 @@
 
 一个 [Modern Industrialization](https://github.com/AztechMC/Modern-Industrialization) + [Extended Industrialization](https://github.com/Swedz/Extended-Industrialization) 的附属 mod，为 EI 的「处理阵列」（Processing Array）提供一个与 [Applied Energistics 2](https://github.com/AppliedEnergistics/Applied-Energistics-2) 联动的 **ME 样板供应仓**。
 
+## 下载
+
+**CurseForge（主发布渠道）**：<https://www.curseforge.com/minecraft/mc-mods/modern-industrialization-ae2-pattern-provider>
+
+支持 **Minecraft 1.21.1（NeoForge 21.1.219+）**，必需依赖 Modern Industrialization、Extended Industrialization、Applied Energistics 2（ExtendedAE、Cloth Config 为可选）。
+
 ## 功能
 
 - **四合一仓**：单个方块同时承担物品输入 / 物品输出 / 流体输入 / 流体输出四种接口，取代处理阵列原本的 4 种仓。
