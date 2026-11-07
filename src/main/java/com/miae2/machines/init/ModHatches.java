@@ -166,7 +166,7 @@ public final class ModHatches {
                 "me_interface_hatch",
                 bet -> new MeInterfaceBlockEntity(
                         bet,
-                        interfaceGuiParams(INTERFACE_ITEM_INPUT_SLOTS, INTERFACE_FLUID_INPUT_SLOTS),
+                        interfaceGuiParams("me_interface_hatch"),
                         INTERFACE_ITEM_INPUT_SLOTS, INTERFACE_ITEM_OUTPUT_SLOTS,
                         INTERFACE_FLUID_INPUT_SLOTS, INTERFACE_FLUID_OUTPUT_SLOTS,
                         INTERFACE_FLUID_CAPACITY,
@@ -190,7 +190,7 @@ public final class ModHatches {
                         bet,
                         // 界面高度只按**一页 4 行**算：36 槽档位靠客户端翻页，一页永远只显示 4 行
                         // （物品入 2 行 + 物品出 2 行，或流体入 2 行 + 流体出 2 行），与原版档同高 192。
-                        interfaceGuiParams(18, 0),
+                        interfaceGuiParams(blockId),
                         itemSlots, itemSlots, fluidSlots, fluidSlots,
                         fluidCapacity,
                         tier,
@@ -221,11 +221,19 @@ public final class ModHatches {
                 INTERFACE_OVERSIZE_SLOTS, INTERFACE_OVERSIZE_SLOTS, 64_000L);
     }
 
-    /** 接口仓的 GUI 参数（按槽位行数算高度）。 */
-    private static MachineGuiParameters interfaceGuiParams(int itemSlots, int fluidSlots) {
-        return new MachineGuiParameters.Builder("me_interface_hatch", true)
-                .backgroundHeight(MeInterfaceBlockEntity.requiredGuiHeight(
-                        itemSlots, itemSlots, fluidSlots, fluidSlots))
+    /**
+     * 接口仓的 GUI 参数。
+     *
+     * <p>{@code blockId} 用**真实方块 id**：MI 用它取界面标题与背景，硬编码成基础档的话
+     * 扩展/超大档的标题会错误地显示成「ME接口仓」（2026-11-07 用户实测）。
+     *
+     * <p>高度只按**一页 4 行**算：36 槽档位靠客户端翻页，一页永远只显示 4 行
+     * （物品入 2 行 + 物品出 2 行，或流体入 2 行 + 流体出 2 行），与原版档同高 192。
+     * 传 {@code (9, 9)} 恰好得到 4 行；传 {@code (18, 0)} 会多出两行空白（zeros 也按 1 行算）。
+     */
+    private static MachineGuiParameters interfaceGuiParams(String blockId) {
+        return new MachineGuiParameters.Builder(blockId, true)
+                .backgroundHeight(MeInterfaceBlockEntity.requiredGuiHeight(9, 9, 9, 9))
                 .build();
     }
 
