@@ -62,6 +62,11 @@ public class MeInterfaceLogic extends InterfaceLogic {
         super(mainNode, host, item, tier.configSlots());
         this.tier = tier;
         applyInputCapacity(tier);
+        // 超大档：照抄 ExtendedAE 的做法，把两个 inventory 换成 OversizeConfigInv 才能突破 64
+        // （AE2 的物品槽容量被堆叠大小锁死，setCapacity 无效）。扩展档保持普通实现（每槽 64，与 EAE 扩展接口一致）。
+        if (tier == Tier.OVERSIZE && net.neoforged.fml.ModList.get().isLoaded("extendedae")) {
+            OversizeInterfaceInventories.apply(this, tier.configSlots());
+        }
     }
 
     /**
