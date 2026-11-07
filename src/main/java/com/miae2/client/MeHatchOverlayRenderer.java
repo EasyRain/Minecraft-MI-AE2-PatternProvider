@@ -25,7 +25,7 @@ import net.minecraft.world.inventory.InventoryMenu;
  */
 public class MeHatchOverlayRenderer implements BlockEntityRenderer<HatchBlockEntity> {
 
-    private static final ResourceLocation OVERLAY = ResourceLocation.fromNamespaceAndPath(
+    public static final ResourceLocation OVERLAY = ResourceLocation.fromNamespaceAndPath(
             "mi_ae2_pattern_provider", "block/me_pattern_provider_hatch_overlay_side");
 
     /** 稍微外移，避免与方块表面 Z-fighting。 */

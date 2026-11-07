@@ -1,6 +1,7 @@
 {
   "parent": "minecraft:block/cube_all",
   "textures": {
-    "all": "mi_ae2_pattern_provider:block/me_interface_hatch"
+    "all": "mi_ae2_pattern_provider:block/me_interface_hatch",
+    "overlay": "mi_ae2_pattern_provider:block/me_pattern_provider_hatch_overlay_side"
   }
 }
