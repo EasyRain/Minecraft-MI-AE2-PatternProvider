@@ -243,6 +243,7 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
             this.loadInitDone = true;
             this.miae2$onLoadInit();
         }
+        this.logic.miae2$ensureCapacity();
         this.yielding = this.miae2$providerOrderActive();
         this.miae2$syncInputsFromInterface();
         this.miae2$drainOutputsToNetwork();

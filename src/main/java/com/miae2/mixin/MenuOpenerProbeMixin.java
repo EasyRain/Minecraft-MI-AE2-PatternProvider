@@ -31,17 +31,31 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(value = MenuOpener.class, remap = false)
 public abstract class MenuOpenerProbeMixin {
 
+    @Inject(method = "returnTo", at = @At("HEAD"), remap = false, require = 0)
+    private static void miae2$logReturnTo(MenuType<?> menuType, Player player, MenuHostLocator locator,
+                                          CallbackInfoReturnable<Boolean> cir) {
+        miae2$log("returnTo", menuType);
+    }
+
     @Inject(method = "open", at = @At("HEAD"), remap = false, require = 0)
     private static void miae2$logInterfaceOpen(MenuType<?> menuType, Player player, MenuHostLocator locator,
                                                CallbackInfoReturnable<Boolean> cir) {
-        // 只关心接口系菜单，避免刷屏
+        miae2$log("open", menuType);
+    }
+
+    @Inject(method = "open", at = @At("HEAD"), remap = false, require = 0)
+    private static void miae2$logInterfaceOpen4(MenuType<?> menuType, Player player, MenuHostLocator locator,
+                                                boolean b, CallbackInfoReturnable<Boolean> cir) {
+        miae2$log("open4", menuType);
+    }
+
+    private static void miae2$log(String which, MenuType<?> menuType) {
         String name = menuType == null ? "null" : String.valueOf(menuType);
         if (!name.contains("interface") && !name.contains("Interface")) {
             return;
         }
         Logger logger = com.mojang.logging.LogUtils.getLogger();
-        StringBuilder sb = new StringBuilder("[菜单探针] open ").append(name).append(" locator=")
-                .append(locator == null ? "null" : locator.getClass().getSimpleName());
+        StringBuilder sb = new StringBuilder("[菜单探针] ").append(which).append(" ").append(name);
         StackTraceElement[] trace = new Throwable().getStackTrace();
         for (int i = 1; i < Math.min(trace.length, 9); i++) {
             String frame = trace[i].toString();

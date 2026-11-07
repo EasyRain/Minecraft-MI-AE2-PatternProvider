@@ -71,6 +71,26 @@ public class MeInterfaceLogic extends InterfaceLogic {
      * {@code extends GenericStackInv}，{@code setCapacity} 是<b>公开</b>方法 ⇒ 不需要反射/accessor
      * （ExtendedAE 的 Oversize 之所以用反射，是因为它要整体替换成一个自定义 inventory 子类）。
      */
+    /**
+     * 读档后**重新施加档位容量**。
+     *
+     * <p>父类 {@code InterfaceLogic} 在构造与读档路径里都会调 {@code ConfigInventory.useRegisteredCapacities()}，
+     * 把每槽容量重置成「注册表默认值」（物品 64 / 流体 1B），于是我们设的 1024 / 64B 会被抹掉 ——
+     * 这就是「超大接口仓的保持量最多只能设到 64」的根因（2026-11-07 用户实测）。
+     */
+    @Override
+    public void readFromNBT(net.minecraft.nbt.CompoundTag tag, net.minecraft.core.HolderLookup.Provider registries) {
+        super.readFromNBT(tag, registries);
+        this.applyInputCapacity(this.tier);
+    }
+
+    /** 每 tick 兜底：容量被外部重置时补回来（比较是 long，几乎零开销）。 */
+    public void miae2$ensureCapacity() {
+        if (getStorage().getCapacity(AEKeyType.items()) != this.tier.itemCapacity()) {
+            this.applyInputCapacity(this.tier);
+        }
+    }
+
     private void applyInputCapacity(Tier tier) {
         getStorage().setCapacity(AEKeyType.items(), tier.itemCapacity());
         getStorage().setCapacity(AEKeyType.fluids(), tier.fluidCapacity());
