@@ -62,9 +62,6 @@ public class MiAe2PatternProvider {
         // 菜单守卫：把「原生接口菜单」的重开请求在我们 36 槽接口仓上改写成扩展菜单
         // （否则 36 槽必崩：AE2 的 InterfaceScreen 要 amtButton10..36，原生样式只有 9 个）。
         com.miae2.ae.NativeInterfaceMenuGuard.install();
-        // 升级卡支持必须等物品注册完（common setup）再登记：AE2 的 Upgrades 注册表以「机器物品」为键。
-        modEventBus.addListener((net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent event)
-                -> event.enqueueWork(com.miae2.ae.InterfaceUpgrades::register));
         ModItems.ITEMS.register(modEventBus);
         // 本 mod 自己的 GuideME 指南书（「使用手册」物品右键打开它）。与 EI / MI 一样在构造函数里注册：
         // 页面本身是资源，注册只是把「指南 id → 页面目录」这条映射登记进 GuideME。
@@ -102,6 +99,9 @@ public class MiAe2PatternProvider {
     /** 扫描「原版样板供应器能用的升级卡」并嫁接到本 mod 的供应仓上（enqueueWork 保证在主线程执行）。 */
     private static void onLoadComplete(FMLLoadCompleteEvent event) {
         event.enqueueWork(MePatternProviderUpgrades::register);
+        // 接口仓同理：必须等所有 mod 的 common setup 跑完再扫，否则会漏掉 EAEP 等附属登记的卡
+        // （2026-11-07 实测：放在 FMLCommonSetupEvent 里扫不到 EAEP 的频道卡）。
+        event.enqueueWork(com.miae2.ae.InterfaceUpgrades::register);
     }
 
     /**
