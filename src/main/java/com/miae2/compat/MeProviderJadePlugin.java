@@ -80,6 +80,8 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
     @Override
     public void registerClient(IWailaClientRegistration registration) {
         registration.registerBlockComponent(new NodeLine(), MachineBlock.class);
+        // 流体存储的**客户端**渲染器（只注册服务端的话数据取到了也没人画）
+        registration.registerFluidStorageClient(new InterfaceFluidStorageProvider());
         LOGGER.info("[悬浮提示] Jade 插件已注册（客户端行：设备在线 / 设备离线）");
     }
 

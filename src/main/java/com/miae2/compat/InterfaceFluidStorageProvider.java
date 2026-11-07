@@ -11,6 +11,7 @@ import snownee.jade.api.Accessor;
 import snownee.jade.api.fluid.JadeFluidObject;
 import snownee.jade.api.view.FluidView;
 import snownee.jade.api.view.IServerExtensionProvider;
+import snownee.jade.api.view.FluidView;
 import snownee.jade.api.view.ViewGroup;
 
 /**
@@ -24,7 +25,9 @@ import snownee.jade.api.view.ViewGroup;
  *
  * <p>只处理 {@code >9} 槽的档位：原版档由 MI 自己的 provider 显示，避免重复。
  */
-public final class InterfaceFluidStorageProvider implements IServerExtensionProvider<CompoundTag> {
+public final class InterfaceFluidStorageProvider
+        implements IServerExtensionProvider<CompoundTag>,
+        snownee.jade.api.view.IClientExtensionProvider<CompoundTag, FluidView> {
 
     private static final ResourceLocation UID =
             ResourceLocation.fromNamespaceAndPath(MiAe2PatternProvider.MOD_ID, "interface_fluids");
@@ -63,6 +66,28 @@ public final class InterfaceFluidStorageProvider implements IServerExtensionProv
             views.add(FluidView.writeDefault(JadeFluidObject.empty(), free));
         }
         return views.isEmpty() ? List.of() : List.of(new ViewGroup<>(views));
+    }
+
+    /**
+     * 客户端侧：把服务端给的 `CompoundTag` 解成 {@link FluidView} 交给 Jade 的标准渲染器。
+     *
+     * <p>**两边都要注册**（`registerFluidStorage` + `registerFluidStorageClient`），
+     * 只注册服务端时数据会取到但没人渲染 —— 表现就是「流体条完全不显示」（2026-11-07 实测）。
+     */
+    @Override
+    public List<snownee.jade.api.view.ClientViewGroup<FluidView>> getClientGroups(
+            Accessor<?> accessor, List<ViewGroup<CompoundTag>> groups) {
+        List<snownee.jade.api.view.ClientViewGroup<FluidView>> out = new ArrayList<>();
+        for (ViewGroup<CompoundTag> group : groups) {
+            List<FluidView> views = new ArrayList<>();
+            for (CompoundTag tag : group.views) {
+                views.add(FluidView.readDefault(tag));
+            }
+            if (!views.isEmpty()) {
+                out.add(new snownee.jade.api.view.ClientViewGroup<>(views));
+            }
+        }
+        return out;
     }
 
     /** 仅用于日志/调试：确认 AEFluidKey 的引用不会带来类加载问题。 */
