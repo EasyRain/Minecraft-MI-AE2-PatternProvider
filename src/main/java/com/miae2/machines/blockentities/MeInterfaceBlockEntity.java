@@ -117,6 +117,9 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
     private final AEKey[] mirrorFluidKey = new AEKey[INTERFACE_SLOTS];
     private final long[] mirrorFluidAmount = new long[INTERFACE_SLOTS];
 
+    /** 读档初始化只做一次（见 tick()）。 */
+    private boolean loadInitDone;
+
     /** 让位状态（同阵列样板仓有订单在飞）：MI 侧输入要「看不见、抽不走」。 */
     private boolean yielding;
 
@@ -217,6 +220,10 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
             return;
         }
         this.miae2$ensureNode();
+        if (!this.loadInitDone) {
+            this.loadInitDone = true;
+            this.miae2$onLoadInit();
+        }
         this.yielding = this.miae2$providerOrderActive();
         this.miae2$syncInputsFromInterface();
         this.miae2$drainOutputsToNetwork();
@@ -230,7 +237,82 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
         }
     }
 
+    /**
+     * 读档 / 区块重载后的一次性初始化：**把 MIInventory 里的 stack 对象重新对齐到我们自己那批**。
+     *
+     * <p>MI 的 {@code MIInventory.readNbt} 每次读档都会 {@code new} 一批 {@code ConfigurableItemStack}
+     * 塞回自己的列表，并随后把**锁**留在我们原有对象上（内容在新对象、锁在旧对象）。于是出现「两个缓存」：
+     * {@code appendItemInputs/Outputs}（阵列读的）用我们的列表，而 GUI / 方块能力 / 镜像同步用 MI 的列表。
+     *
+     * <p>接口仓的症状就是用户报的「加工中输出槽看不到产物」「重进存档后行为变样」。
+     * 修法与样板仓一致：把内容搬回我们的对象，再让 MIInventory 的列表反过来指向我们的对象
+     * —— **我们的对象永不更换**，阵列手里的引用才不会悬空。
+     */
+    private void miae2$onLoadInit() {
+        this.miae2$rebindInventoryStacks();
+    }
+
+    private void miae2$rebindInventoryStacks() {
+        List<ConfigurableItemStack> miItems = this.inventory.getItemStacks();
+        List<ConfigurableFluidStack> miFluids = this.inventory.getFluidStacks();
+        int itemIn = this.itemInputs.size();
+        int itemOut = this.itemOutputs.size();
+        int fluidIn = this.fluidInputs.size();
+        int fluidOut = this.fluidOutputs.size();
+        if (miItems.size() < itemIn + itemOut || miFluids.size() < fluidIn + fluidOut) {
+            LOGGER.warn("[读档初始化] MIInventory 槽数与预期不符（物品 {}/{}，流体 {}/{}），跳过库存重绑定",
+                    miItems.size(), itemIn + itemOut, miFluids.size(), fluidIn + fluidOut);
+            return;
+        }
+
+        miae2$copyItemContents(miItems.subList(0, itemIn), this.itemInputs);
+        miae2$copyItemContents(miItems.subList(itemIn, itemIn + itemOut), this.itemOutputs);
+        miae2$copyFluidContents(miFluids.subList(0, fluidIn), this.fluidInputs);
+        miae2$copyFluidContents(miFluids.subList(fluidIn, fluidIn + fluidOut), this.fluidOutputs);
+
+        miItems.clear();
+        miItems.addAll(this.itemInputs);
+        miItems.addAll(this.itemOutputs);
+        miFluids.clear();
+        miFluids.addAll(this.fluidInputs);
+        miFluids.addAll(this.fluidOutputs);
+
+        if ((!miItems.isEmpty() && !this.itemInputs.isEmpty() && miItems.get(0) != this.itemInputs.get(0))
+                || (!miFluids.isEmpty() && !this.fluidInputs.isEmpty()
+                        && miFluids.get(0) != this.fluidInputs.get(0))) {
+            LOGGER.warn("[读档初始化] 库存重绑定后 MIInventory 与本地列表仍不是同一批对象，"
+                    + "GUI 与处理阵列可能各看一套");
+        }
+    }
+
+    private static void miae2$copyItemContents(List<ConfigurableItemStack> src, List<ConfigurableItemStack> dst) {
+        for (int i = 0; i < dst.size() && i < src.size(); i++) {
+            ConfigurableItemStack from = src.get(i);
+            ConfigurableItemStack to = dst.get(i);
+            if (from.isEmpty()) {
+                to.setAmount(0);
+            } else {
+                to.setKey(from.getResource());
+                to.setAmount(from.getAmount());
+            }
+        }
+    }
+
+    private static void miae2$copyFluidContents(List<ConfigurableFluidStack> src, List<ConfigurableFluidStack> dst) {
+        for (int i = 0; i < dst.size() && i < src.size(); i++) {
+            ConfigurableFluidStack from = src.get(i);
+            ConfigurableFluidStack to = dst.get(i);
+            if (from.isEmpty()) {
+                to.setAmount(0);
+            } else {
+                to.setKey(from.getResource());
+                to.setAmount(from.getAmount());
+            }
+        }
+    }
+
     // ---------- AE ⇄ MI 同步（接口语义的核心） ----------
+
 
     /**
      * 把 AE 侧配置槽的内容镜像到 MI 侧输入槽位，并按索引一一对应（AE 第 i 槽 ⇄ MI 物品/流体第 i 槽）。
