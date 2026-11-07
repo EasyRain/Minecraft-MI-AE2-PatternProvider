@@ -183,14 +183,17 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
             var style = helper.progressStyle()
                     .overlay(helper.fluid(snownee.jade.api.fluid.JadeFluidObject.of(fluid, amount)))
                     .textColor(0xFFAAAAAA)
-                    .fitContentX(false);
+                    .fitContentX(true);
             tooltip.add(helper.progress(ratio, Component.literal(label), style,
                     snownee.jade.api.ui.BoxStyle.getNestedBox(), false));
         }
 
         if (serverData.contains("miae2Free")) {
-            tooltip.add(Component.literal("空 " + MeInterfaceBlockEntity.miae2$formatFluid(serverData.getLong("miae2Free")))
+            // 「空」那一行在 AE 里也是**带框**的，所以这里同样包一个盒子（只有文字）
+            var empty = new snownee.jade.impl.Tooltip();
+            empty.add(Component.literal("空 " + MeInterfaceBlockEntity.miae2$formatFluid(serverData.getLong("miae2Free")))
                     .withStyle(ChatFormatting.GRAY));
+            tooltip.add(helper.box(empty, snownee.jade.api.ui.BoxStyle.getNestedBox()));
         }
     }
 
