@@ -188,7 +188,9 @@ public final class ModHatches {
                 blockId,
                 bet -> new MeInterfaceBlockEntity(
                         bet,
-                        interfaceGuiParams(itemSlots, fluidSlots),
+                        // 界面高度只按**一页 4 行**算：36 槽档位靠客户端翻页，一页永远只显示 4 行
+                        // （物品入 2 行 + 物品出 2 行，或流体入 2 行 + 流体出 2 行），与原版档同高 192。
+                        interfaceGuiParams(18, 0),
                         itemSlots, itemSlots, fluidSlots, fluidSlots,
                         fluidCapacity,
                         tier,
