@@ -51,11 +51,19 @@ public final class NativeInterfaceMenuGuard {
                     be.miae2$configSlots(), be.getBlockPos(), miae2$caller());
             return ExtendedAeInterfaceMenuCompat.openExtended(serverPlayer, locator);
         }
-        // 其它接口：与 AE2 默认行为一致（构造原生菜单并打开）
-        player.openMenu(new SimpleMenuProvider(
-                (id, inventory, p) -> new InterfaceMenu(InterfaceMenu.TYPE, id, inventory, host),
-                host.getMainMenuIcon().getHoverName()));
-        return true;
+        // 其它接口：与 AE2 默认行为一致。**必须把 locator 写进 open-menu 的附加数据**：
+        // AE2 的菜单在客户端要从包里 `MenuLocators.readFromPacket(buf)` 还原宿主，
+        // 不带数据的 `player.openMenu(provider)` 会让客户端拿到 null buf ⇒ NPE ⇒ 网络协议错误
+        // （2026-11-07 实测：基础档 9 槽接口一打开就断线）。
+        if (player instanceof ServerPlayer serverPlayer) {
+            ((net.neoforged.neoforge.common.extensions.IPlayerExtension) serverPlayer).openMenu(
+                    new SimpleMenuProvider(
+                            (id, inventory, p) -> new InterfaceMenu(InterfaceMenu.TYPE, id, inventory, host),
+                            host.getMainMenuIcon().getHoverName()),
+                    buf -> appeng.menu.locator.MenuLocators.writeToPacket(buf, locator));
+            return true;
+        }
+        return false;
     }
 
     /** 取一层「谁调用的」调用栈（跳过本类与 AE2 的菜单框架）。 */
