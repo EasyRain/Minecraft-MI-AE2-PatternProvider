@@ -270,6 +270,50 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
      */
     private void miae2$onLoadInit() {
         this.miae2$rebindInventoryStacks();
+        // 与样板仓一致：读档后补写节点 owner（未绑定的 EAEP 频道卡按 owner 回退匹配），
+        // 再请求 EAEP 的频道卡控制器重建无线链路。缺了这两步，频道卡会「插进去但必须手动绑定玩家才生效」。
+        this.miae2$ensureOwner();
+        this.miae2$restoreChannelCard();
+    }
+
+    /**
+     * 补写 AE 节点 owner（读档 / 旧存档兼容）。
+     *
+     * <p>{@code onPlaced} 只在放置那一刻设 owner；读档后节点可能没有 owner ⇒ EAEP 的频道卡
+     * 拿不到回退所有者（{@code getOwningPlayerProfileId()} 为 null）⇒ 未绑定的卡连不上。
+     * 这里用 MI 自己持久化的放置者 {@code placedBy.placerId} 回填（找不到人就算了，无副作用）。
+     */
+    private void miae2$ensureOwner() {
+        var node = this.mainNode.getNode();
+        if (node == null || node.getOwningPlayerProfileId() != null || this.level == null) {
+            return;
+        }
+        java.util.UUID placer = this.placedBy.placerId;
+        if (placer == null || this.level.getServer() == null) {
+            return;
+        }
+        var player = this.level.getServer().getPlayerList().getPlayer(placer);
+        if (player != null) {
+            this.mainNode.setOwningPlayer(player);
+            LOGGER.info("[节点] 已按放置者补写 AE 节点 owner @ {}", this.getBlockPos());
+        }
+    }
+
+    /** 反射请求 EAEP 的频道卡控制器重建无线链路；没装 EAEP 时静默跳过。 */
+    private void miae2$restoreChannelCard() {
+        try {
+            java.lang.reflect.Method getController = this.logic.getClass().getMethod("eap$getChannelCardController");
+            Object controller = getController.invoke(this.logic);
+            if (controller == null) {
+                return;
+            }
+            controller.getClass().getMethod("onLoaded").invoke(controller);
+            LOGGER.info("[节点] 网格节点就绪，已请求 EAEP 重新建立频道卡连接 @ {}", this.getBlockPos());
+        } catch (NoSuchMethodException ignored) {
+            // 未安装 ExtendedAE-Plus（或它没有频道卡功能）→ 正常
+        } catch (Throwable t) {
+            LOGGER.warn("[节点] 重建频道卡连接失败", t);
+        }
     }
 
     private void miae2$rebindInventoryStacks() {
