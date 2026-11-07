@@ -697,15 +697,19 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
      * <p>只锁空格（{@code lockAllEmpty}）不够：残料所在的格仍然对外报告可接纳空间，
      * 阵列会把活动仓的产物塞进这里 ⇒ 活动仓永远等不到自己的产物。
      *
-     * <p><b>不保留玩家锁</b>（2026-11-07 用户定调）：供应仓是纯自动化方块，玩家在它输出格上设的锁
-     * 没有保留价值，直接覆盖即可 —— 这也是「供应仓 vs 接口仓」的分工：接口仓才需要保留玩家锁
-     * （它是按原位锁定、不参与合成）。
+     * <p><b>清空后覆盖，且不还原</b>（2026-11-07 用户定调）：让位时先把锁**全部清空**（含玩家锁）再统一
+     * 锁死；结束后不还原。原因是「保留玩家锁」会留下漏口 —— 玩家锁住的格仍报告可接纳空间，
+     * 阵列能把料从那里拿走。供应仓与接口仓同此口径，唯一区别是供应仓不参与「还原」这一步。
      */
     private void miae2$applyYieldLocks() {
         if (this.yieldLocksApplied) {
             return;
         }
         this.yieldLocksApplied = true;
+        // 先**清空**所有锁（含玩家自己设的），再统一锁死。
+        // 只用「补锁」不清旧锁是漏口：玩家锁住的格仍然对外报告「可接纳该物品」的空间，
+        // 阵列就能从那里把料拿走（用户 2026-11-07：「否则可能会从接口的玩家锁定出去」）。
+        this.unlockAllOutputs();
         for (ConfigurableItemStack stack : this.itemOutputs) {
             if (!stack.isPlayerLocked()) {
                 stack.togglePlayerLock();
