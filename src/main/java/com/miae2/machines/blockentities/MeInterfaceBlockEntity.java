@@ -756,69 +756,58 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
      * <p>只在槽里真的有东西时才列，最多各 8 条 —— 比一屏「空 4B」可读得多。
      */
     public void miae2$appendContentsPreview(net.minecraft.nbt.ListTag items, net.minecraft.nbt.ListTag fluids) {
-        // 物品：逐条列非空（含输入/输出），最多 8 条
+        // 格式照抄 ExtendedAE 自家接口的 Jade 显示（用户 2026-11-07 指定）：
+        //   物品：`64× 绿宝石`（每条一个非空槽）
+        //   流体：`熔岩 1B`、`水 1B` …… 再补一行汇总 `空 2.17kB`（所有流体槽的**剩余容量之和**）
         int itemLines = 0;
-        int itemUsed = 0;
         for (ConfigurableItemStack stack : this.itemInputs) {
-            if (stack.isEmpty()) {
-                continue;
-            }
-            itemUsed++;
-            if (itemLines < 8) {
+            if (!stack.isEmpty() && itemLines < 8) {
                 items.add(net.minecraft.nbt.StringTag.valueOf(
-                        "物品：" + stack.getVariant().toStack().getHoverName().getString() + " ×" + stack.getAmount()));
+                        stack.getAmount() + "× " + stack.getVariant().toStack().getHoverName().getString()));
                 itemLines++;
             }
         }
         for (ConfigurableItemStack stack : this.itemOutputs) {
-            if (stack.isEmpty()) {
-                continue;
-            }
-            itemUsed++;
-            if (itemLines < 8) {
+            if (!stack.isEmpty() && itemLines < 8) {
                 items.add(net.minecraft.nbt.StringTag.valueOf(
-                        "产物：" + stack.getVariant().toStack().getHoverName().getString() + " ×" + stack.getAmount()));
+                        stack.getAmount() + "× " + stack.getVariant().toStack().getHoverName().getString()));
                 itemLines++;
             }
         }
-        // 恒定一行概况：让「全空」时也能看出槽位规模
-        items.add(net.minecraft.nbt.StringTag.valueOf(
-                "物品槽：已用 " + itemUsed + " / " + (this.itemInputs.size() + this.itemOutputs.size())));
 
-        // 流体：逐条列非空，最多 8 条；并恒定给一行概况（用户要的「流体预览」）
         int fluidLines = 0;
-        int fluidUsed = 0;
-        long fluidTotal = 0L;
+        long free = 0L;
         for (ConfigurableFluidStack stack : this.fluidInputs) {
-            if (stack.isEmpty()) {
-                continue;
-            }
-            fluidUsed++;
-            fluidTotal += stack.getAmount();
-            if (fluidLines < 8) {
+            long capacity = stack.getCapacity();
+            free += Math.max(0L, capacity - stack.getAmount());
+            if (!stack.isEmpty() && fluidLines < 8) {
                 fluids.add(net.minecraft.nbt.StringTag.valueOf(
-                        "流体：" + stack.getVariant().getFluid().getFluidType().getDescription().getString()
-                                + " " + stack.getAmount() + " mB"));
+                        stack.getVariant().getFluid().getFluidType().getDescription().getString()
+                                + " " + miae2$formatFluid(stack.getAmount())));
                 fluidLines++;
             }
         }
         for (ConfigurableFluidStack stack : this.fluidOutputs) {
-            if (stack.isEmpty()) {
-                continue;
-            }
-            fluidUsed++;
-            fluidTotal += stack.getAmount();
-            if (fluidLines < 8) {
+            long capacity = stack.getCapacity();
+            free += Math.max(0L, capacity - stack.getAmount());
+            if (!stack.isEmpty() && fluidLines < 8) {
                 fluids.add(net.minecraft.nbt.StringTag.valueOf(
-                        "产物流体：" + stack.getVariant().getFluid().getFluidType().getDescription().getString()
-                                + " " + stack.getAmount() + " mB"));
+                        stack.getVariant().getFluid().getFluidType().getDescription().getString()
+                                + " " + miae2$formatFluid(stack.getAmount())));
                 fluidLines++;
             }
         }
-        long perSlot = this.fluidInputs.isEmpty() ? 0L : this.fluidInputs.get(0).getCapacity();
-        fluids.add(net.minecraft.nbt.StringTag.valueOf(
-                "流体槽：已用 " + fluidUsed + " / " + (this.fluidInputs.size() + this.fluidOutputs.size())
-                        + "（每格 " + perSlot + " mB，共 " + fluidTotal + " mB）"));
+        // 汇总行：ExtendEA 对空槽也是这么显示的（`空 144B` / `空 2.17kB`）
+        fluids.add(net.minecraft.nbt.StringTag.valueOf("空 " + miae2$formatFluid(free)));
+    }
+
+    /** 把 mB 量格式化成 EAE 那种 `1B` / `144B` / `2.17kB` 形式（1 B = 1000 mB）。 */
+    private static String miae2$formatFluid(long milliBuckets) {
+        double buckets = milliBuckets / 1000.0;
+        if (buckets >= 1000.0) {
+            return String.format(java.util.Locale.ROOT, "%.2fkB", buckets / 1000.0);
+        }
+        return String.format(java.util.Locale.ROOT, "%.0fB", buckets);
     }
 
     /** 网格节点是否在线（供 Jade / TOP 显示「设备在线 / 设备离线」，与样板仓一致）。 */
