@@ -723,6 +723,19 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         }
     }
 
+    /**
+     * 丢弃让位锁快照但**不改动任何锁**。
+     *
+     * <p>必须在 {@link #lockOutputs} / {@link #unlockAllOutputs} 之前调用：那两个方法已经把全部输出锁
+     * 重置过一遍，此时若再用旧快照去「还原」，会把刚设好的产品锁又 toggle 掉
+     * —— 2026-11-07 实测的「切换供应器后输出没锁全」就是这个竞态。
+     */
+    private void miae2$forgetYieldLocks() {
+        this.yieldLocksApplied = false;
+        this.yieldItemLocks = new boolean[0];
+        this.yieldFluidLocks = new boolean[0];
+    }
+
     /** 释放让位锁：只把「我们加的锁」去掉，快照里本来就有锁的格保持不动。 */
     private void miae2$releaseYieldLocks() {
         if (!this.yieldLocksApplied) {
@@ -1012,6 +1025,7 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
      * 已经装了半格的槽拖低，所以一种流体只锁它需要的那一格。
      */
     public void lockOutputs(IPatternDetails patternDetails) {
+        this.miae2$forgetYieldLocks();
         this.unlockAllOutputs();
         this.miae2$lockItemOutputsSpread(patternDetails);
 
@@ -1390,6 +1404,7 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
             if (++this.claimIdleTicks >= CLAIM_RELEASE_TICKS) {
                 this.claimIdleTicks = 0;
                 this.activePattern = null;
+                this.miae2$forgetYieldLocks();
                 this.unlockAllOutputs();
                 this.setChanged();
                 this.sync();
@@ -1417,6 +1432,7 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         this.idleTicks = 0;
         this.returnInputsToNetwork();
         this.activePattern = null;
+        this.miae2$forgetYieldLocks();
         this.unlockAllOutputs();
         this.setChanged();
         this.sync(); // 让 GUI/Jade 立刻反映回收结果
