@@ -750,6 +750,58 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
         return true;
     }
 
+    /**
+     * 为 Jade 悬浮提示生成「有内容的槽」摘要（36 槽档位用：MI 自带的容器预览对它们不输出）。
+     *
+     * <p>只在槽里真的有东西时才列，最多各 8 条 —— 比一屏「空 4B」可读得多。
+     */
+    public void miae2$appendContentsPreview(net.minecraft.nbt.ListTag items, net.minecraft.nbt.ListTag fluids) {
+        int itemLimit = 8;
+        for (ConfigurableItemStack stack : this.itemInputs) {
+            if (itemLimit <= 0) {
+                break;
+            }
+            if (!stack.isEmpty()) {
+                items.add(net.minecraft.nbt.StringTag.valueOf(
+                        "物品：" + stack.getVariant().toStack().getHoverName().getString() + " ×" + stack.getAmount()));
+                itemLimit--;
+            }
+        }
+        for (ConfigurableItemStack stack : this.itemOutputs) {
+            if (itemLimit <= 0) {
+                break;
+            }
+            if (!stack.isEmpty()) {
+                items.add(net.minecraft.nbt.StringTag.valueOf(
+                        "产物：" + stack.getVariant().toStack().getHoverName().getString() + " ×" + stack.getAmount()));
+                itemLimit--;
+            }
+        }
+        int fluidLimit = 8;
+        for (ConfigurableFluidStack stack : this.fluidInputs) {
+            if (fluidLimit <= 0) {
+                break;
+            }
+            if (!stack.isEmpty()) {
+                fluids.add(net.minecraft.nbt.StringTag.valueOf(
+                        "流体：" + stack.getVariant().getFluid().getFluidType().getDescription().getString()
+                                + " " + stack.getAmount() + " mB"));
+                fluidLimit--;
+            }
+        }
+        for (ConfigurableFluidStack stack : this.fluidOutputs) {
+            if (fluidLimit <= 0) {
+                break;
+            }
+            if (!stack.isEmpty()) {
+                fluids.add(net.minecraft.nbt.StringTag.valueOf(
+                        "产物流体：" + stack.getVariant().getFluid().getFluidType().getDescription().getString()
+                                + " " + stack.getAmount() + " mB"));
+                fluidLimit--;
+            }
+        }
+    }
+
     /** 网格节点是否在线（供 Jade / TOP 显示「设备在线 / 设备离线」，与样板仓一致）。 */
     public boolean miae2$isNodeOnline() {
         var node = this.mainNode.getNode();

@@ -6,6 +6,7 @@ import com.miae2.machines.blockentities.MeInterfaceBlockEntity;
 import com.miae2.machines.blockentities.MePatternProviderBlockEntity;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import org.slf4j.Logger;
@@ -56,6 +57,9 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
             ResourceLocation.fromNamespaceAndPath(MiAe2PatternProvider.MOD_ID, "grid_node");
 
     private static final String TAG_ONLINE = "miae2NodeOnline";
+    /** 36 槽接口仓的内容预览（物品条目 / 流体条目，各上限若干条）。 */
+    private static final String TAG_ITEMS = "miae2Items";
+    private static final String TAG_FLUIDS = "miae2Fluids";
 
     // 这一行的文案在 Jade 与 The One Probe（MeProviderTopPlugin）里共用，所以用本 mod 自己的前缀。
     private static final String KEY_ONLINE = "text.mi_ae2_pattern_provider.device_online";
@@ -97,9 +101,28 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
                     return;
                 }
                 serverData.putBoolean(TAG_ONLINE, online);
+
+                // 36 槽档位：MI 自带的容器预览对它们不输出（原因在 MI 内部），这里补一份「有内容的槽」摘要。
+                if (accessor.getBlockEntity() instanceof MeInterfaceBlockEntity be) {
+                    ListTag items = new ListTag();
+                    ListTag fluids = new ListTag();
+                    be.miae2$appendContentsPreview(items, fluids);
+                    serverData.put(TAG_ITEMS, items);
+                    serverData.put(TAG_FLUIDS, fluids);
+                }
             } catch (Throwable ignored) {
                 // 悬浮提示永远不该因为一个状态读取失败而报错
             }
+        }
+    }
+
+    /** 把内容预览加成若干行（每行一条；服务端已经限好条数）。 */
+    private static void appendPreview(ITooltip tooltip, ListTag items, ListTag fluids) {
+        for (int i = 0; i < items.size(); i++) {
+            tooltip.add(Component.literal(items.getString(i)).withStyle(ChatFormatting.GRAY));
+        }
+        for (int i = 0; i < fluids.size(); i++) {
+            tooltip.add(Component.literal(fluids.getString(i)).withStyle(ChatFormatting.GRAY));
         }
     }
 
@@ -144,6 +167,12 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
                 }
                 tooltip.add(Component.translatable(online ? KEY_ONLINE : KEY_OFFLINE)
                         .withStyle(ChatFormatting.GRAY));
+
+                // 36 槽接口仓的内容预览（原版档由 MI 自己的 provider 提供，别重复）
+                if (accessor.getBlockEntity() instanceof MeInterfaceBlockEntity) {
+                    appendPreview(tooltip, serverData.getList(TAG_ITEMS, net.minecraft.nbt.Tag.TAG_STRING),
+                            serverData.getList(TAG_FLUIDS, net.minecraft.nbt.Tag.TAG_STRING));
+                }
             } catch (Throwable ignored) {
                 // 同上：绝不让悬浮提示因为本 mod 报错
             }
