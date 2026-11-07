@@ -85,6 +85,8 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
         registration.registerBlockDataProvider(new NodeData(), MePatternProviderBlockEntity.class);
         commonRegistration = registration;
         registration.registerBlockDataProvider(new NodeData(), MeInterfaceBlockEntity.class);
+        // 流体行有自己的 UID ⇒ 必须也有自己的服务端数据 provider（Jade 按 UID 分发数据）
+        registration.registerBlockDataProvider(new FluidData(), MeInterfaceBlockEntity.class);
         LOGGER.info("[悬浮提示] Jade 插件已注册（服务端数据：网格节点在线状态）");
     }
 
@@ -118,11 +120,8 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
                 }
                 serverData.putBoolean(TAG_ONLINE, online);
 
-                // 流体行**永远**由我们写（确定性最重要：之前的「有标准管道就不写」开关会抖动，
-                // 因为那个 provider 时而被调用时而不被调用）。
-                if (accessor.getBlockEntity() instanceof MeInterfaceBlockEntity be) {
-                    be.miae2$writeContentsPreview(serverData);
-                }
+                // 流体数据由 FluidData（UID = grid_node_fluids）单独发送 ——
+                // Jade 的服务端数据是**按 provider UID 分开同步**的，混在 NodeData 里 FluidLine 收不到。
             } catch (Throwable ignored) {
                 // 悬浮提示永远不该因为一个状态读取失败而报错
             }
@@ -134,6 +133,26 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
      *
      * <p>物品那行不在这里做：MI 自己的物品预览对我们这几个仓是可用 的，重复输出会变成两行。
      */
+    /** 服务端：把流体摘要写进 **FluidLine 自己的 UID** 那份数据里。 */
+    private static final class FluidData implements IServerDataProvider<BlockAccessor> {
+
+        @Override
+        public ResourceLocation getUid() {
+            return FLUID_UID;
+        }
+
+        @Override
+        public void appendServerData(CompoundTag serverData, BlockAccessor accessor) {
+            try {
+                if (accessor.getBlockEntity() instanceof MeInterfaceBlockEntity be) {
+                    be.miae2$writeContentsPreview(serverData);
+                }
+            } catch (Throwable ignored) {
+                // 悬浮提示永远不该因为本 mod 报错
+            }
+        }
+    }
+
     /** 流体行：优先级比 MI 的物品预览更「靠后」，保证显示顺序是 设备 → 物品 → 流体。 */
     private static final class FluidLine implements IBlockComponentProvider {
 
