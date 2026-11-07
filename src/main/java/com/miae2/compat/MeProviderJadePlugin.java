@@ -2,6 +2,7 @@ package com.miae2.compat;
 
 import aztech.modern_industrialization.machines.MachineBlock;
 import com.miae2.MiAe2PatternProvider;
+import com.miae2.machines.blockentities.MeInterfaceBlockEntity;
 import com.miae2.machines.blockentities.MePatternProviderBlockEntity;
 import net.minecraft.ChatFormatting;
 import net.minecraft.nbt.CompoundTag;
@@ -66,6 +67,7 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
     @Override
     public void register(IWailaCommonRegistration registration) {
         registration.registerBlockDataProvider(new NodeData(), MePatternProviderBlockEntity.class);
+        registration.registerBlockDataProvider(new NodeData(), MeInterfaceBlockEntity.class);
         LOGGER.info("[悬浮提示] Jade 插件已注册（服务端数据：网格节点在线状态）");
     }
 
@@ -86,10 +88,15 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
         @Override
         public void appendServerData(CompoundTag serverData, BlockAccessor accessor) {
             try {
-                if (!(accessor.getBlockEntity() instanceof MePatternProviderBlockEntity be)) {
+                boolean online;
+                if (accessor.getBlockEntity() instanceof MePatternProviderBlockEntity be) {
+                    online = be.miae2$isNodeOnline();
+                } else if (accessor.getBlockEntity() instanceof MeInterfaceBlockEntity be) {
+                    online = be.miae2$isNodeOnline();
+                } else {
                     return;
                 }
-                serverData.putBoolean(TAG_ONLINE, be.miae2$isNodeOnline());
+                serverData.putBoolean(TAG_ONLINE, online);
             } catch (Throwable ignored) {
                 // 悬浮提示永远不该因为一个状态读取失败而报错
             }
@@ -113,7 +120,8 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
         public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
             try {
                 // MI 所有机器共用 MachineBlock → 这个 provider 会被每一台 MI 机器调用，先认领自己的仓。
-                if (!(accessor.getBlockEntity() instanceof MePatternProviderBlockEntity)) {
+                if (!(accessor.getBlockEntity() instanceof MePatternProviderBlockEntity)
+                        && !(accessor.getBlockEntity() instanceof MeInterfaceBlockEntity)) {
                     return;
                 }
                 CompoundTag serverData = accessor.getServerData();

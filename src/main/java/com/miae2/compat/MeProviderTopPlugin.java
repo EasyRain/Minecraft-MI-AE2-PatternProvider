@@ -1,6 +1,7 @@
 package com.miae2.compat;
 
 import com.miae2.MiAe2PatternProvider;
+import com.miae2.machines.blockentities.MeInterfaceBlockEntity;
 import com.miae2.machines.blockentities.MePatternProviderBlockEntity;
 import com.mojang.logging.LogUtils;
 import java.util.function.Function;
@@ -68,10 +69,15 @@ public final class MeProviderTopPlugin implements Function<ITheOneProbe, Void> {
                     return;
                 }
                 // MI 所有机器共用 MachineBlock，但这个接口是按方块实体判定的，先认领自己的仓。
-                if (!(level.getBlockEntity(data.getPos()) instanceof MePatternProviderBlockEntity be)) {
+                boolean online;
+                if (level.getBlockEntity(data.getPos()) instanceof MePatternProviderBlockEntity be) {
+                    online = be.miae2$isNodeOnline();
+                } else if (level.getBlockEntity(data.getPos()) instanceof MeInterfaceBlockEntity be) {
+                    online = be.miae2$isNodeOnline();
+                } else {
                     return;
                 }
-                probeInfo.mcText(Component.translatable(be.miae2$isNodeOnline() ? KEY_ONLINE : KEY_OFFLINE)
+                probeInfo.mcText(Component.translatable(online ? KEY_ONLINE : KEY_OFFLINE)
                         .withStyle(ChatFormatting.GRAY));
             } catch (Throwable ignored) {
                 // 悬浮提示永远不该因为一个状态读取失败而报错

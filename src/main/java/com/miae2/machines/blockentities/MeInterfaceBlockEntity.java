@@ -750,6 +750,12 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
         return true;
     }
 
+    /** 网格节点是否在线（供 Jade / TOP 显示「设备在线 / 设备离线」，与样板仓一致）。 */
+    public boolean miae2$isNodeOnline() {
+        var node = this.mainNode.getNode();
+        return node != null && node.isActive();
+    }
+
     /** 配置槽数量（9 = 原版档；36 = 扩展/超大档）。供菜单守卫判断该走哪套界面。 */
     public int miae2$configSlots() {
         return this.logic.getConfig().size();
