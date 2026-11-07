@@ -84,8 +84,16 @@ Hovering the hatch shows **Device Online** or **Device Offline**, exactly like A
 independent of AE2's shared tooltip extension point, so other MI machines' tooltips are unaffected. Jade and TOP
 are optional.
 
-## One provider per array
+## Several providers per array (only one works at a time)
 
-A Processing Array accepts **only one** ME Pattern Provider Hatch (extended version included). A second one makes
-the whole multiblock report **Structure invalid**, with an explanation in the server log; removing the extra hatch
-fixes it. [Patterns & Autocrafting](patterns.md) explains why.
+An array used to accept a single ME Pattern Provider Hatch. It now accepts **several** — without ExtendedAE the basic
+hatch only has 9 pattern slots, which is often not enough. The rule is **one active provider at a time**:
+
+* exactly one hatch takes the order, locks its output slots and receives the products;
+* the others **lock all their output slots empty** and **refuse new orders**, yielding to the active one;
+* once the active hatch has delivered its own products (about two seconds), it releases the claim and the next
+  hatch may take over.
+
+**Note:** the output-slot locks of a provider are **managed by the mod** — they are cleared and re-set on every
+order (including locks you set by hand), so products can only land in the hatch that is actually working. If you
+want to control slots manually, use an interface hatch instead. [Patterns & Autocrafting](patterns.md) explains why.

@@ -36,16 +36,27 @@ grid. Encode with the <ItemImage id="ae2:pattern_encoding_terminal" /> in **proc
 The hatch holds the pattern until **its own** products have come back (`LOCK_UNTIL_RESULT`). That is what makes the
 buffer safe: one pattern is never re-fed while its results are still in flight.
 
-## Why one hatch per array
+## Several hatches, one working at a time
 
 The array writes its products into **any accepting output slot of its aggregated inventory** — it does not promise
 they land back in the hatch that supplied the ingredients. Each hatch tracks its own output locks, leftover
 recycling and result-waiting, so if products landed in a *different* hatch, the supplying hatch would wait forever
 for products it will never see, and the craft would deadlock.
 
-Rather than guess at cross-hatch ownership, the mod simply forbids a second hatch: **one Processing Array, one ME
-Pattern Provider Hatch**. If you place two, the multiblock reports **Structure invalid** (and tells you why in the
-server log) until you remove one.
+**The fix:** every non-active hatch reports **zero output space** (all its output slots are locked empty). Products
+therefore have nowhere to go except the hatch that is actually working, and ownership becomes deterministic again.
+So multiple hatches are safe as long as **only one of them takes orders at a time**:
+
+1. the active hatch takes the order, locks its outputs and receives the products;
+2. every other hatch locks all outputs empty and its `pushPattern` simply returns `false` (AE2 retries later);
+3. once the active hatch has delivered its own products (not requested any more, inputs empty, outputs empty —
+   for about two seconds) it releases the claim and the next hatch may take over.
+
+That decision is derived from live state, never persisted, so reloading, cancelling an order or breaking the
+network cannot leave a stale lock behind.
+
+> One boundary remains: **do not mix in a vanilla output hatch** (MI item/fluid output) inside the same array.
+> Products can land there, they belong to no provider, and the hatch waiting for them will keep waiting.
 
 ## "Waiting" is not always a bug
 
