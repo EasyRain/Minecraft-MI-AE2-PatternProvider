@@ -345,7 +345,13 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
             ConfigurableFluidStack fluidSlot = this.fluidInputs.get(i);
 
             if (this.yielding || i >= storageSlots) {
-                // 让位 / 超出配置槽：清空 MI 侧视图与快照（**不**动 AE storage）
+                // 让位 / 超出配置槽：清空 MI 侧视图与快照（**不**动 AE storage）。
+                // 但若有 spill 余量，必须先塞回网络；塞不掉就保留这格、跳过镜像（宁可不同步，也不丢物）。
+                boolean itemOk = this.miae2$releaseItemSpill(i);
+                boolean fluidOk = this.miae2$releaseFluidSpill(i);
+                if (!itemOk || !fluidOk) {
+                    continue;
+                }
                 itemSlot.empty();
                 fluidSlot.empty();
                 this.mirrorItemKey[i] = null;
@@ -359,6 +365,10 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
             long target = storage.getAmount(i);
             if (key instanceof AEItemKey itemKey) {
                 // 先对账（被吃掉就扣 AE、玩家塞进来就收进 AE），拿到「该显示多少」
+                if (!this.miae2$releaseFluidSpill(i)) {
+                    // 流体侧还有余量没地方去：这一格先别动（物品侧同样跳过，避免半格状态）
+                    continue;
+                }
                 long itemTarget = this.miae2$reconcileItem(i, itemKey, storage);
                 fluidSlot.empty();
                 this.mirrorFluidKey[i] = null;
@@ -372,6 +382,9 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
                 this.mirrorItemKey[i] = itemKey;
                 this.mirrorItemAmount[i] = itemSlot.getAmount();
             } else if (key instanceof AEFluidKey fluidKey) {
+                if (!this.miae2$releaseItemSpill(i)) {
+                    continue;
+                }
                 long fluidTarget = this.miae2$reconcileFluid(i, fluidKey, storage);
                 itemSlot.empty();
                 this.mirrorItemKey[i] = null;
@@ -385,7 +398,10 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
                 this.mirrorFluidKey[i] = fluidKey;
                 this.mirrorFluidAmount[i] = fluidSlot.getAmount();
             } else {
-                // 该槽没有配置内容：两边都清空
+                // 该槽没有配置内容：两边都清空（同样先救 spill 余量）
+                if (!this.miae2$releaseItemSpill(i) || !this.miae2$releaseFluidSpill(i)) {
+                    continue;
+                }
                 itemSlot.empty();
                 fluidSlot.empty();
                 this.mirrorItemKey[i] = null;
@@ -416,9 +432,8 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
             long accepted = storage.insert(i, key, extra, Actionable.MODULATE);
             this.spillItemAmount[i] = extra - accepted;
         }
-        long desired = storage.getAmount(i) + this.spillItemAmount[i];
-        this.spillItemAmount[i] = 0L;
-        return desired;
+        // spill 持久保留（不在这里清零）：改配置/清空槽/让位时还要用它把余量救回来
+        return storage.getAmount(i) + this.spillItemAmount[i];
     }
 
     /** 流体的同上。 */
@@ -435,9 +450,70 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
             long accepted = storage.insert(i, key, extra, Actionable.MODULATE);
             this.spillFluidAmount[i] = extra - accepted;
         }
-        long desired = storage.getAmount(i) + this.spillFluidAmount[i];
-        this.spillFluidAmount[i] = 0L;
-        return desired;
+        return storage.getAmount(i) + this.spillFluidAmount[i];
+    }
+
+    /**
+     * 把 MI 侧某格的内容尽量塞回 AE 网络（用于「改配置 / 清空 / 让位」前保住余量）。
+     *
+     * @return 实际塞回去的量
+     */
+    private long miae2$dumpItemSlotToNetwork(ConfigurableItemStack slot, long limit) {
+        IGrid grid = this.mainNode.getGrid();
+        if (grid == null || slot.isEmpty() || limit <= 0) {
+            return 0L;
+        }
+        long amount = Math.min(limit, slot.getAmount());
+        if (amount <= 0) {
+            return 0L;
+        }
+        MEStorage network = grid.getStorageService().getInventory();
+        long inserted = network.insert(AEItemKey.of(slot.toStack()), amount, Actionable.MODULATE, IActionSource.empty());
+        if (inserted > 0) {
+            slot.decrement(inserted);
+        }
+        return inserted;
+    }
+
+    private long miae2$dumpFluidSlotToNetwork(ConfigurableFluidStack slot, long limit) {
+        IGrid grid = this.mainNode.getGrid();
+        if (grid == null || slot.isEmpty() || limit <= 0) {
+            return 0L;
+        }
+        long amount = Math.min(limit, slot.getAmount());
+        if (amount <= 0) {
+            return 0L;
+        }
+        MEStorage network = grid.getStorageService().getInventory();
+        long inserted = network.insert(AEFluidKey.of(slot.getVariant().getFluid()), amount, Actionable.MODULATE,
+                IActionSource.empty());
+        if (inserted > 0) {
+            slot.decrement(inserted);
+        }
+        return inserted;
+    }
+
+    /**
+     * 该槽即将被清空/覆盖：先把 **spill 余量**塞回网络，塞不掉的留下。
+     *
+     * @return true = 余量已清掉，可以安全清空/覆盖该槽；false = 还有余量没地方去，**不要动这一格**
+     */
+    private boolean miae2$releaseItemSpill(int i) {
+        if (this.spillItemAmount[i] <= 0) {
+            return true;
+        }
+        long dumped = this.miae2$dumpItemSlotToNetwork(this.itemInputs.get(i), this.spillItemAmount[i]);
+        this.spillItemAmount[i] -= dumped;
+        return this.spillItemAmount[i] <= 0;
+    }
+
+    private boolean miae2$releaseFluidSpill(int i) {
+        if (this.spillFluidAmount[i] <= 0) {
+            return true;
+        }
+        long dumped = this.miae2$dumpFluidSlotToNetwork(this.fluidInputs.get(i), this.spillFluidAmount[i]);
+        this.spillFluidAmount[i] -= dumped;
+        return this.spillFluidAmount[i] <= 0;
     }
 
     /**
