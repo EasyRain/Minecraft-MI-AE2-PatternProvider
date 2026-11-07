@@ -86,6 +86,17 @@ public class ConfigurableItemStackMixin implements IUnboundedItemAccessor {
         // 绝不能在这里写 adjustedCapacity（会抹掉其它 mod / 玩家机器配置设定的容量）。
     }
 
+    @Unique
+    @Override
+    public void miae2$setCapacity(int capacity) {
+        // 只在「本 mod 的槽」上调用；不走 unbounded 标记，容量就是实打实的有限值。
+        this.miae2$unbounded = false;
+        this.miae2$savedCapacity = -1;
+        if (capacity > 0) {
+            this.adjustedCapacity = capacity;
+        }
+    }
+
     @Inject(method = "<init>(Lnet/minecraft/nbt/CompoundTag;Lnet/minecraft/core/HolderLookup$Provider;)V", at = @At("TAIL"))
     private void miae2$init(CompoundTag compound, Provider registries, CallbackInfo ci) {
         // MI 已经读过 adjCap（别人的容量在这里已经就位）—— 只有本 mod 自己的槽才动它。

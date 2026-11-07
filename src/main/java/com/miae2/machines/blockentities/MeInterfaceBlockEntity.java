@@ -162,10 +162,12 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
         // 输入槽：普通输入槽（容量由 AE 侧 config/storage 决定，MI 侧只做视图 —— TODO ②）
         for (int i = 0; i < itemInSlots; i++) {
             ConfigurableItemStack slot = ConfigurableItemStack.standardInputSlot();
-            // 输入槽只是镜像容器：其容量必须**不低于** AE 侧每槽容量，否则大容量档位会被 MI 侧卡在 64
-            // （用户实测：超大档 AE 侧能填 1024，MI 侧却显示 64）。输入不参与阵列并行推算，所以给无上限是安全的。
-            // 流体侧不需要这招：流体槽容量本来就是构造参数（4B/64B）。
-            ((IUnboundedItemAccessor) slot).miae2$setUnbounded(true);
+            // 输入槽只是 AE storage 的镜像容器：容量必须**等于** AE 侧每槽容量（64 / 64 / 1024）。
+            // 不设成「无上限」的原因（用户 2026-11-07 提问点破）：无上限会让玩家能在 MI 侧超塞，
+            // 超出的部分 AE 收不下、只能留在 MI 槽里，就得再写一套 spill 兜底；给具体容量则 MI 自己挡住超塞，
+            // 语义更简单，也不会出现「AE 显示 64 / MI 显示 200」这种两套数字。
+            // 输入不参与阵列并行推算，所以这个容量不影响倍率。
+            ((IUnboundedItemAccessor) slot).miae2$setCapacity((int) Math.min(Integer.MAX_VALUE, tier.itemCapacity()));
             this.itemInputs.add(slot);
         }
         // 输出槽：物品<b>普通容量 64</b>，绝不能无上限（阵列按输出空间反推并行，虚报会销毁产物）
