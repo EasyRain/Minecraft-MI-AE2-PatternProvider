@@ -688,74 +688,43 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
 
     // ---------- 让位锁（多仓单活） ----------
 
-    /** 让位锁是否已施加（用于精确还原玩家自己设的锁）。 */
+    /** 让位锁是否已施加（只用来避免重复 toggle）。 */
     private boolean yieldLocksApplied;
-    private boolean[] yieldItemLocks = new boolean[0];
-    private boolean[] yieldFluidLocks = new boolean[0];
 
     /**
      * 让位时锁住**全部**输出格（含已有残料的格）。
      *
      * <p>只锁空格（{@code lockAllEmpty}）不够：残料所在的格仍然对外报告可接纳空间，
-     * 阵列会把活动仓的产物塞进这里 ⇒ 活动仓永远等不到自己的产物。锁之前先快照玩家锁，
-     * 释放时按快照还原，绝不误清玩家自己设的锁。
+     * 阵列会把活动仓的产物塞进这里 ⇒ 活动仓永远等不到自己的产物。
+     *
+     * <p><b>不保留玩家锁</b>（2026-11-07 用户定调）：供应仓是纯自动化方块，玩家在它输出格上设的锁
+     * 没有保留价值，直接覆盖即可 —— 这也是「供应仓 vs 接口仓」的分工：接口仓才需要保留玩家锁
+     * （它是按原位锁定、不参与合成）。
      */
     private void miae2$applyYieldLocks() {
         if (this.yieldLocksApplied) {
             return;
         }
         this.yieldLocksApplied = true;
-        this.yieldItemLocks = new boolean[this.itemOutputs.size()];
-        for (int i = 0; i < this.itemOutputs.size(); i++) {
-            ConfigurableItemStack stack = this.itemOutputs.get(i);
-            this.yieldItemLocks[i] = stack.isPlayerLocked();
+        for (ConfigurableItemStack stack : this.itemOutputs) {
             if (!stack.isPlayerLocked()) {
                 stack.togglePlayerLock();
             }
         }
-        this.yieldFluidLocks = new boolean[this.fluidOutputs.size()];
-        for (int i = 0; i < this.fluidOutputs.size(); i++) {
-            ConfigurableFluidStack stack = this.fluidOutputs.get(i);
-            this.yieldFluidLocks[i] = stack.isPlayerLocked();
+        for (ConfigurableFluidStack stack : this.fluidOutputs) {
             if (!stack.isPlayerLocked()) {
                 stack.togglePlayerLock();
             }
         }
     }
 
-    /**
-     * 丢弃让位锁快照但**不改动任何锁**。
-     *
-     * <p>必须在 {@link #lockOutputs} / {@link #unlockAllOutputs} 之前调用：那两个方法已经把全部输出锁
-     * 重置过一遍，此时若再用旧快照去「还原」，会把刚设好的产品锁又 toggle 掉
-     * —— 2026-11-07 实测的「切换供应器后输出没锁全」就是这个竞态。
-     */
-    private void miae2$forgetYieldLocks() {
-        this.yieldLocksApplied = false;
-        this.yieldItemLocks = new boolean[0];
-        this.yieldFluidLocks = new boolean[0];
-    }
-
-    /** 释放让位锁：只把「我们加的锁」去掉，快照里本来就有锁的格保持不动。 */
+    /** 释放让位锁：供应仓不区分「谁的锁」，直接全解。 */
     private void miae2$releaseYieldLocks() {
         if (!this.yieldLocksApplied) {
             return;
         }
         this.yieldLocksApplied = false;
-        for (int i = 0; i < this.itemOutputs.size() && i < this.yieldItemLocks.length; i++) {
-            ConfigurableItemStack stack = this.itemOutputs.get(i);
-            if (!this.yieldItemLocks[i] && stack.isPlayerLocked()) {
-                stack.togglePlayerLock();
-            }
-        }
-        for (int i = 0; i < this.fluidOutputs.size() && i < this.yieldFluidLocks.length; i++) {
-            ConfigurableFluidStack stack = this.fluidOutputs.get(i);
-            if (!this.yieldFluidLocks[i] && stack.isPlayerLocked()) {
-                stack.togglePlayerLock();
-            }
-        }
-        this.yieldItemLocks = new boolean[0];
-        this.yieldFluidLocks = new boolean[0];
+        this.unlockAllOutputs();
     }
 
     public boolean miae2$anotherProviderActive() {
@@ -1025,7 +994,6 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
      * 已经装了半格的槽拖低，所以一种流体只锁它需要的那一格。
      */
     public void lockOutputs(IPatternDetails patternDetails) {
-        this.miae2$forgetYieldLocks();
         this.unlockAllOutputs();
         this.miae2$lockItemOutputsSpread(patternDetails);
 
@@ -1404,8 +1372,7 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
             if (++this.claimIdleTicks >= CLAIM_RELEASE_TICKS) {
                 this.claimIdleTicks = 0;
                 this.activePattern = null;
-                this.miae2$forgetYieldLocks();
-                this.unlockAllOutputs();
+                        this.unlockAllOutputs();
                 this.setChanged();
                 this.sync();
                 LOGGER.info("[多仓单活] 本仓样板已交付完毕，释放 claim 让出阵列 @ {}", this.getBlockPos());
@@ -1432,7 +1399,6 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         this.idleTicks = 0;
         this.returnInputsToNetwork();
         this.activePattern = null;
-        this.miae2$forgetYieldLocks();
         this.unlockAllOutputs();
         this.setChanged();
         this.sync(); // 让 GUI/Jade 立刻反映回收结果
