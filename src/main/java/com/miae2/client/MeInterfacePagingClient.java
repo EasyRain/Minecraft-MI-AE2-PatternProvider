@@ -71,8 +71,11 @@ public final class MeInterfacePagingClient {
         var mi = menu.getMachineInventory();
         LOGGER.info("[接口翻页] 打开界面 blockId={} menu.slots={} 机器槽(库存)={} 物品栈={} 流体栈={}",
                 path, menu.slots.size(), machineSlots, mi.getItemStacks().size(), mi.getFluidStacks().size());
-        // 判据用**机器槽数**（36 槽档位 = 144 个），而不是 blockId：万一方块 id 改名也不会失效。
-        if (machineSlots < 4 * GROUP) {
+        // 判据用**机器槽数**而不是 blockId：原版档 36 个（9×4），扩展/超大档 108 个（36+18 输入各两组 + 18+18 输出）。
+        // ⚠️ 这两处数字必须与 ModHatches 的注册参数保持一致 —— 2026-11-07 把输出从 36 改 18 后，
+        //    这里残留的旧阈值（≥144）让翻页直接不生效、界面乱套。
+        int expectedTierSlots = 2 * GROUP + 2 * OUT_GROUP; // 36+36 输入 + 18+18 输出
+        if (machineSlots != expectedTierSlots) {
             return;
         }
         new Pager(screen, event::addListener).install();
