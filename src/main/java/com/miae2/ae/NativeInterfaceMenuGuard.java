@@ -1,32 +1,32 @@
 package com.miae2.ae;
 
 import appeng.helpers.InterfaceLogicHost;
+import appeng.menu.AEBaseMenu;
 import appeng.menu.MenuOpener;
 import appeng.menu.implementations.InterfaceMenu;
 import appeng.menu.locator.MenuHostLocator;
 import com.miae2.machines.blockentities.MeInterfaceBlockEntity;
 import com.mojang.logging.LogUtils;
-import net.minecraft.network.chat.Component;
+import java.lang.reflect.Field;
+import java.util.Map;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.SimpleMenuProvider;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.MenuType;
 import org.slf4j.Logger;
 
 /**
- * 把「原生接口菜单」的重开请求，在我们 36 槽的接口仓上改写成 ExtendedAE 的扩展接口菜单。
+ * 只把「我们 36 槽接口仓」的原生接口菜单打开请求，改写成 ExtendedAE 的扩展接口菜单。
  *
- * <p><b>为什么要这么做</b>（2026-11-07 实测，扩展档与超大档都复现）：
- * 在 AE 界面里设置保持量并点确认后，会**有别处**用 AE2 原生的 {@code InterfaceMenu} 重新打开界面，
- * 而原生界面按「配置槽数量」去样式里取 {@code amtButton{i+1}} 控件（{@code InterfaceScreen} 构造里那个循环），
- * 36 个槽 → 需要 {@code amtButton10..36}，原生样式只有 9 个 ⇒
- * {@code IllegalStateException: Screen is missing required widget: amtButton10} ⇒ 客户端被踢出世界。
+ * <p><b>为什么需要</b>：36 个配置槽的接口在设置保持量并点确认后，会**有别处**用 AE2 原生的
+ * {@code InterfaceMenu} 重新打开界面；原生界面按配置槽数量取 {@code amtButton{i+1}} 控件
+ * （36 槽要 amtButton10..36，原生样式只有 9 个）⇒
+ * {@code IllegalStateException: Screen is missing required widget: amtButton10} ⇒ 客户端被踢。
  *
- * <p>AE2 允许用 {@link MenuOpener#addOpener} 覆盖某个菜单类型的打开逻辑，于是这里：
- * <ul>
- *   <li>打开目标是我们自己的 36 槽接口仓 → 改成 ExtendedEA 的 {@code ContainerExInterface.TYPE}（界面带 36 个控件，正常显示）；</li>
- *   <li>其它任何接口（AE2 原版的方块/部件）→ 按原样构造 {@link InterfaceMenu} 并打开，行为与默认一致。</li>
- * </ul>
- *
- * <p>顺带打一条带调用栈的日志：把「是谁在重开界面」记录下来，便于以后判断是否该在上游修。
+ * <p><b>为什么必须委托给 AE2 原本的 opener</b>：{@link MenuOpener#addOpener} 是**替换**语义。
+ * 我们只关心自己那几个方块，其它接口（AE2 原版方块/部件、ExtendedAE 的接口等）必须原样走 AE2 的默认实现 ——
+ * 自己重写一遍开菜单是行不通的：AE2 的菜单在客户端要按它自己的格式从 open-menu 包里读数据，
+ * 手写的附加数据一旦不一致就会「网络协议错误 / IndexOutOfBounds」（2026-11-07 连续踩了两次）。
+ * 所以这里先用反射把**原来注册的 opener 抓下来**，兜底时原样调用。
  */
 public final class NativeInterfaceMenuGuard {
 
@@ -35,35 +35,45 @@ public final class NativeInterfaceMenuGuard {
     private NativeInterfaceMenuGuard() {
     }
 
-    /** 在 mod 初始化（common setup）时调用一次。 */
+    /** 在 mod 初始化时调用一次（此时 AE2 已给自己的菜单类型注册过 opener）。 */
     public static void install() {
-        MenuOpener.addOpener(InterfaceMenu.TYPE, (player, locator, force) -> miae2$openInterface(player, locator));
+        MenuOpener.Opener original = miae2$lookupOriginal();
+        if (original == null) {
+            LOGGER.warn("[接口守卫] 没能取到 AE2 原本的 InterfaceMenu opener，守卫不安装（36 槽确认时可能崩）");
+            return;
+        }
+        MenuOpener.addOpener(InterfaceMenu.TYPE, (player, locator, force) -> {
+            InterfaceLogicHost host = locator.locate(player, InterfaceLogicHost.class);
+            if (host instanceof MeInterfaceBlockEntity be && be.miae2$configSlots() > 9
+                    && player instanceof ServerPlayer serverPlayer) {
+                LOGGER.info("[接口守卫] 拦截到原生接口菜单的重开，改用扩展菜单（{} 槽）@ {}；调用方：{}",
+                        be.miae2$configSlots(), be.getBlockPos(), miae2$caller());
+                return ExtendedAeInterfaceMenuCompat.openExtended(serverPlayer, locator);
+            }
+            // 其它一切接口：原样交回 AE2 的默认实现（含它自己的 open-menu 数据格式）
+            return original.open(player, locator, force);
+        });
+        LOGGER.info("[接口守卫] 已接管 InterfaceMenu 的打开请求（仅改写 36 槽接口仓，其余委托给 AE2）");
     }
 
-    private static boolean miae2$openInterface(net.minecraft.world.entity.player.Player player, MenuHostLocator locator) {
-        InterfaceLogicHost host = locator.locate(player, InterfaceLogicHost.class);
-        if (host == null) {
-            return false;
+    /** 反射取 {@code MenuOpener.registry} 里当前的 InterfaceMenu opener。 */
+    private static MenuOpener.Opener miae2$lookupOriginal() {
+        try {
+            Field field = MenuOpener.class.getDeclaredField("registry");
+            field.setAccessible(true);
+            Object value = field.get(null);
+            if (!(value instanceof Map<?, ?> map)) {
+                return null;
+            }
+            Object opener = map.get(InterfaceMenu.TYPE);
+            if (opener instanceof MenuOpener.Opener o) {
+                return o;
+            }
+            return null;
+        } catch (Throwable t) {
+            LOGGER.warn("[接口守卫] 读取 MenuOpener.registry 失败", t);
+            return null;
         }
-        // 我们自己 36 槽的接口仓：原生界面必崩，改走 ExtendedAE 的扩展菜单
-        if (host instanceof MeInterfaceBlockEntity be && be.miae2$configSlots() > 9 && player instanceof ServerPlayer serverPlayer) {
-            LOGGER.info("[接口守卫] 拦截到原生接口菜单的重开，改用扩展菜单（{} 槽）@ {}；调用方：{}",
-                    be.miae2$configSlots(), be.getBlockPos(), miae2$caller());
-            return ExtendedAeInterfaceMenuCompat.openExtended(serverPlayer, locator);
-        }
-        // 其它接口：与 AE2 默认行为一致。**必须把 locator 写进 open-menu 的附加数据**：
-        // AE2 的菜单在客户端要从包里 `MenuLocators.readFromPacket(buf)` 还原宿主，
-        // 不带数据的 `player.openMenu(provider)` 会让客户端拿到 null buf ⇒ NPE ⇒ 网络协议错误
-        // （2026-11-07 实测：基础档 9 槽接口一打开就断线）。
-        if (player instanceof ServerPlayer serverPlayer) {
-            ((net.neoforged.neoforge.common.extensions.IPlayerExtension) serverPlayer).openMenu(
-                    new SimpleMenuProvider(
-                            (id, inventory, p) -> new InterfaceMenu(InterfaceMenu.TYPE, id, inventory, host),
-                            host.getMainMenuIcon().getHoverName()),
-                    buf -> appeng.menu.locator.MenuLocators.writeToPacket(buf, locator));
-            return true;
-        }
-        return false;
     }
 
     /** 取一层「谁调用的」调用栈（跳过本类与 AE2 的菜单框架）。 */
