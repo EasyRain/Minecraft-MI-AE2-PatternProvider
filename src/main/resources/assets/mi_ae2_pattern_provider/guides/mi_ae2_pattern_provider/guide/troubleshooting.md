@@ -46,6 +46,17 @@ Check, in this order:
    items that will never exist.
 5. **Is the hatch online?** Hover it with Jade/TOP: **Device Online** means the network sees it.
 
+## After a reload, a different hatch takes over the order
+
+If you save and quit in the middle of a craft, the order may be continued by a **different** provider hatch after
+you come back: the materials end up in hatch B instead of the one that pushed them (A). This is expected — "who is
+currently working" is deliberately **not** stored in the save (otherwise a reload could pin an order to the wrong
+hatch forever), so when AE2 retries it may pick another hatch that carries the same pattern.
+
+**The result is unaffected**: the hatch that takes over locks its own output slots, products still return to the
+network and the craft completes normally. No manual action is needed; once the order is done both hatches are back
+to "either may take the next one".
+
 ## The Quantum module does not add parallel
 
 * Make sure it is in a **Processing Array controller** — that is the only place parallel applies. In any other
