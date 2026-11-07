@@ -15,12 +15,14 @@ item_ids:
 [Extended Industrialization](https://modrinth.com/mod/extended-industrialization) 与
 [Applied Energistics 2](https://modrinth.com/mod/ae2) 之间的桥梁。
 
-它只加了一个方块：<ItemLink id="modern_industrialization:me_pattern_provider_hatch" />。这一个方块**同时**
+它的主角是一个方块：<ItemLink id="modern_industrialization:me_pattern_provider_hatch" />。这一个方块**同时**
 取代了 EI **处理阵列**（<ItemImage id="extended_industrialization:processing_array" />）的全部四个输入/输出仓，
 本身又是一个 AE2 样板供应器。把样板放进它、把它接进 ME 网络，你的 ME 系统就能把自动合成任务直接推进阵列
 —— 物品与流体自动分流，成品再被抽回网络。
 
 <BlockImage id="modern_industrialization:me_pattern_provider_hatch" scale="6" />
+
+另有 **ME接口仓**（[接口仓](interface-hatch.md)）负责给阵列长期备料 —— 一个推料、一个备料，配合使用。
 
 *这就是你最先用到的 ME样板供应仓。它的加大版 **ME扩展样板供应仓**（需要
 [ExtendedAE](https://modrinth.com/mod/extended-ae)）见[扩展供应仓](extended-hatch.md) —— 指南里**可选 mod 的内容
