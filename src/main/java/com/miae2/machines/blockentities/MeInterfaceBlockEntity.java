@@ -707,14 +707,21 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
 
     @Override
     public void openMenu(ServerPlayer player) {
+        boolean opened = false;
         try {
-            LOGGER.info("[界面] 打开 AE 接口界面 tier={} @ {}", this.logic.tier(), this.getBlockPos());
+            LOGGER.info("[界面] 打开 AE 接口界面 tier={} configSlots={} @ {}",
+                    this.logic.tier(), this.logic.getConfig().size(), this.getBlockPos());
             switch (this.logic.tier()) {
-                case BASE -> MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(this));
-                case EXTENDED -> com.miae2.ae.ExtendedAeInterfaceMenuCompat.openExtended(player, MenuLocators.forBlockEntity(this));
-                case OVERSIZE -> com.miae2.ae.ExtendedAeInterfaceMenuCompat.openOversize(player, MenuLocators.forBlockEntity(this));
+                case BASE -> opened = MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(this));
+                case EXTENDED -> opened = com.miae2.ae.ExtendedAeInterfaceMenuCompat.openExtended(
+                        player, MenuLocators.forBlockEntity(this));
+                case OVERSIZE -> opened = com.miae2.ae.ExtendedAeInterfaceMenuCompat.openOversize(
+                        player, MenuLocators.forBlockEntity(this));
             }
-            return;
+            LOGGER.info("[界面] 打开结果 opened={} tier={}", opened, this.logic.tier());
+            if (opened) {
+                return;
+            }
         } catch (LinkageError | RuntimeException e) {
             LOGGER.warn("[界面] AE 接口界面打开失败，退回 MI 槽位界面 @ {}", this.getBlockPos(), e);
         }

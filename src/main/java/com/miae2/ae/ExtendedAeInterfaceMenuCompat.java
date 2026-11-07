@@ -21,8 +21,8 @@ public final class ExtendedAeInterfaceMenuCompat {
     }
 
     /** 扩展接口仓（36 槽，4 页 × 9）。 */
-    public static void openExtended(ServerPlayer player, MenuHostLocator locator) {
-        MenuOpener.open(ContainerExInterface.TYPE, player, locator);
+    public static boolean openExtended(ServerPlayer player, MenuHostLocator locator) {
+        return MenuOpener.open(ContainerExInterface.TYPE, player, locator);
     }
 
     /**
@@ -36,7 +36,7 @@ public final class ExtendedAeInterfaceMenuCompat {
      * 两个档位的差别只是**每槽容量**（我们在 {@code MeInterfaceLogic} 里设），与菜单无关，
      * 所以共用扩展档菜单即可，界面完全正常。
      */
-    public static void openOversize(ServerPlayer player, MenuHostLocator locator) {
-        MenuOpener.open(ContainerExInterface.TYPE, player, locator);
+    public static boolean openOversize(ServerPlayer player, MenuHostLocator locator) {
+        return MenuOpener.open(ContainerExInterface.TYPE, player, locator);
     }
 }
