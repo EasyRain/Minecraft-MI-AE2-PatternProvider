@@ -604,6 +604,23 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
         list.addAll(this.itemInputs);
     }
 
+    // ⚠️ 四组槽位都要交出去：只交输入的话，阵列看不到接口的输出槽 ⇒ 没有可用输出空间 ⇒
+    // 「接口有料但机器不加工」（2026-11-07 用户实测）。流体侧同理。
+    @Override
+    public void appendItemOutputs(List<ConfigurableItemStack> list) {
+        list.addAll(this.itemOutputs);
+    }
+
+    @Override
+    public void appendFluidInputs(List<ConfigurableFluidStack> list) {
+        list.addAll(this.fluidInputs);
+    }
+
+    @Override
+    public void appendFluidOutputs(List<ConfigurableFluidStack> list) {
+        list.addAll(this.fluidOutputs);
+    }
+
     // ---------- 工具 ----------
 
     private static int rowsOf(int slots) {
