@@ -117,7 +117,7 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
      *
      * <p>物品那行不在这里做：MI 自己的物品预览对我们这几个仓是可用 的，重复输出会变成两行。
      */
-    private static void appendPreview(ITooltip tooltip, CompoundTag serverData) {
+    private static void appendPreview(ITooltip tooltip, BlockAccessor accessor, CompoundTag serverData) {
         var helper = snownee.jade.api.ui.IElementHelper.get();
         ListTag fluids = serverData.getList("miae2Fluids", net.minecraft.nbt.Tag.TAG_STRING);
         for (int i = 0; i < fluids.size(); i++) {
@@ -138,14 +138,16 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
             } catch (NumberFormatException e) {
                 continue;
             }
-            var inner = new snownee.jade.impl.Tooltip();
-            inner.add(java.util.List.of(
-                    helper.fluid(snownee.jade.api.fluid.JadeFluidObject.of(fluid, amount)),
-                    helper.text(Component.literal(
-                            fluid.getFluidType().getDescription().getString() + " "
-                                    + MeInterfaceBlockEntity.miae2$formatFluid(amount) + " / "
-                                    + MeInterfaceBlockEntity.miae2$formatFluid(capacity)))));
-            tooltip.add(helper.box(inner, snownee.jade.api.ui.BoxStyle.getNestedBox()));
+            // 原版 AE / Jade 标准样式：一条**进度条**（比例 = 当前量 / 每格容量），右侧跟文字；
+            // 容量只在**按住 Shift**（Jade 的 showDetails）时才显示，平时只显示当前量。
+            String name = fluid.getFluidType().getDescription().getString();
+            String label = accessor.showDetails()
+                    ? name + " " + MeInterfaceBlockEntity.miae2$formatFluid(amount) + " / "
+                            + MeInterfaceBlockEntity.miae2$formatFluid(capacity)
+                    : name + " " + MeInterfaceBlockEntity.miae2$formatFluid(amount);
+            float ratio = capacity > 0 ? (float) Math.min(1.0, (double) amount / (double) capacity) : 0.0F;
+            tooltip.add(helper.progress(ratio, Component.literal(label), helper.progressStyle(),
+                    snownee.jade.api.ui.BoxStyle.getNestedBox(), false));
         }
 
         if (serverData.contains("miae2Free")) {
@@ -198,7 +200,7 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
 
                 // 36 槽接口仓的内容预览（原版档由 MI 自己的 provider 提供，别重复）
                 if (accessor.getBlockEntity() instanceof MeInterfaceBlockEntity) {
-                    appendPreview(tooltip, serverData);
+                    appendPreview(tooltip, accessor, serverData);
                 }
             } catch (Throwable ignored) {
                 // 同上：绝不让悬浮提示因为本 mod 报错
