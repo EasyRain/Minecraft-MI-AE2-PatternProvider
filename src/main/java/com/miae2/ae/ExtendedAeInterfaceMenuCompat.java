@@ -25,8 +25,18 @@ public final class ExtendedAeInterfaceMenuCompat {
         MenuOpener.open(ContainerExInterface.TYPE, player, locator);
     }
 
-    /** 超大接口仓（同样 36 槽，只是每槽容量更大）。 */
+    /**
+     * 超大接口仓（同样 36 槽，只是每槽容量更大）。
+     *
+     * <p><b>故意也用 {@code TYPE} 而不是 {@code TYPE_OVERSIZE}</b>：2026-11-07 实测
+     * 打开超大档时客户端崩溃 ——
+     * {@code java.lang.IllegalStateException: Screen is missing required widget: amtButton10}
+     * （AE2 的 {@code InterfaceScreen} 按 36 个配置槽去取 `amtButton*` 控件，
+     * 而 ExtendedAE 的 {@code oversize_interface.json} 里没有这些控件，只有 {@code ex_interface.json} 有）。
+     * 两个档位的差别只是**每槽容量**（我们在 {@code MeInterfaceLogic} 里设），与菜单无关，
+     * 所以共用扩展档菜单即可，界面完全正常。
+     */
     public static void openOversize(ServerPlayer player, MenuHostLocator locator) {
-        MenuOpener.open(ContainerExInterface.TYPE_OVERSIZE, player, locator);
+        MenuOpener.open(ContainerExInterface.TYPE, player, locator);
     }
 }

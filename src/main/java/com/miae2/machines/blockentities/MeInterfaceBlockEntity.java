@@ -708,6 +708,7 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
     @Override
     public void openMenu(ServerPlayer player) {
         try {
+            LOGGER.info("[界面] 打开 AE 接口界面 tier={} @ {}", this.logic.tier(), this.getBlockPos());
             switch (this.logic.tier()) {
                 case BASE -> MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(this));
                 case EXTENDED -> com.miae2.ae.ExtendedAeInterfaceMenuCompat.openExtended(player, MenuLocators.forBlockEntity(this));
