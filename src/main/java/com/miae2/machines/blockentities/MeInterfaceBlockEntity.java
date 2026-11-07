@@ -481,6 +481,22 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
      * 所以只要能提供 host 就能直接复用它的菜单 —— 与样板仓复用 ExtendedAE 菜单同一手法。
      * 打不开时退回 MI 的槽位界面，绝不让服务端线程崩（可选类加载失败也不能崩服）。
      */
+    /**
+     * 扳手右键 → MI 自己的槽位界面（四组槽位；玩家手动取放用）。
+     *
+     * <p>与样板仓同一分工：**右键 = AE 界面，扳手右键 = MI 界面**。
+     * 不覆写这个的话 MI 的默认扳手行为不会打开界面（2026-11-07 用户实测「扳手打不开」）。
+     */
+    @Override
+    public boolean useWrench(net.minecraft.world.entity.player.Player player,
+                            net.minecraft.world.InteractionHand hand,
+                            net.minecraft.world.phys.BlockHitResult hitResult) {
+        if (player instanceof ServerPlayer serverPlayer) {
+            super.openMenu(serverPlayer);
+        }
+        return true;
+    }
+
     @Override
     public void openMenu(ServerPlayer player) {
         try {

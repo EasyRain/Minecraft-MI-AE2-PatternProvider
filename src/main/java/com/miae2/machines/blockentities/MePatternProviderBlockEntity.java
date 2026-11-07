@@ -487,6 +487,7 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         }
         this.drainOutputsToReturnInv();
         this.updateActivePattern();
+        this.miae2$ensureIdleOutputLock();
     }
 
     // ---------- IInWorldGridNodeHost ----------
@@ -702,6 +703,48 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
     private boolean yieldLocksApplied;
 
     /**
+     * 空闲态「输出全锁」是否已施加。
+     *
+     * <p>为什么空闲也要锁：接口仓会按「保持量」持续供料，机器就会**在订单之外**一直跑配方；
+     * 那些产物不该落进供应仓（会占掉一格、还会在下一单里变成「锁着但没用的格」）。
+     * 空闲时把输出全锁成 AIR ⇒ 产物只能进接口仓自己的输出缓冲（那正是它们该去的地方）。
+     */
+    private boolean idleOutputsLocked;
+
+    /**
+     * 空闲态：把输出格锁成 AIR（不允许任何产物落进来）。
+     *
+     * <p>只在「没有自己的订单、且没在让位」时生效；每 tick 补一次锁，因为残料被抽走后
+     * 空出来的格还需要重新锁上（否则下一 tick 又变成可接纳空间）。
+     */
+    private void miae2$ensureIdleOutputLock() {
+        if (this.activePattern != null || this.yieldLocksApplied) {
+            return;
+        }
+        if (!this.idleOutputsLocked) {
+            // 首次进入空闲：清掉上一单留下的产品锁，统一改成 AIR 锁
+            this.unlockAllOutputs();
+            this.idleOutputsLocked = true;
+        }
+        boolean changed = false;
+        for (ConfigurableItemStack stack : this.itemOutputs) {
+            if (!stack.isPlayerLocked() && stack.isEmpty()) {
+                stack.togglePlayerLock();
+                changed = true;
+            }
+        }
+        for (ConfigurableFluidStack stack : this.fluidOutputs) {
+            if (!stack.isPlayerLocked() && stack.isEmpty()) {
+                stack.togglePlayerLock();
+                changed = true;
+            }
+        }
+        if (changed) {
+            this.setChanged();
+        }
+    }
+
+    /**
      * 让位时锁住**全部**输出格（含已有残料的格）。
      *
      * <p>只锁空格（{@code lockAllEmpty}）不够：残料所在的格仍然对外报告可接纳空间，
@@ -716,6 +759,7 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
             return;
         }
         this.yieldLocksApplied = true;
+        this.idleOutputsLocked = false;
         // 先**清空**所有锁（含玩家自己设的），再统一锁死。
         // 只用「补锁」不清旧锁是漏口：玩家锁住的格仍然对外报告「可接纳该物品」的空间，
         // 阵列就能从那里把料拿走（用户 2026-11-07：「否则可能会从接口的玩家锁定出去」）。
@@ -1197,6 +1241,7 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         if (this.activePattern != patternDetails) {
             // 首推或换样板：按新样板重新摊开输出格锁
             this.activePattern = patternDetails;
+            this.idleOutputsLocked = false;
             this.lockOutputs(patternDetails);
             LOGGER.info("[样板切换] 输出格已按新样板重新上锁：{} @ {}", patternDetails.getOutputs(), this.getBlockPos());
         }
