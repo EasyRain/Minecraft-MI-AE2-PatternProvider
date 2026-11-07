@@ -52,6 +52,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.UUID;
 import java.util.Map;
 import java.util.function.Supplier;
 import net.minecraft.core.BlockPos;
@@ -234,7 +235,31 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
             return;
         }
         this.mainNode.create(this.level, this.getBlockPos());
+        this.miae2$ensureOwner();
         this.miae2$restoreChannelCard();
+    }
+
+    /**
+     * 补写 AE 节点 owner（读档 / 旧存档兼容）。
+     *
+     * <p>{@link #onPlaced} 只在放置时设 owner；升级前摆出去的仓没有 owner ⇒ 未绑定的频道卡仍然连不上。
+     * 这里用 MI 自己持久化的「放置者」（{@code placedBy.placerId}）回填：只要放置者在线就补上。
+     * 纯兜底，找不到人就等下次读档——不会有副作用。
+     */
+    private void miae2$ensureOwner() {
+        var node = this.mainNode.getNode();
+        if (node == null || node.getOwningPlayerProfileId() != null || this.level == null) {
+            return;
+        }
+        UUID placer = this.placedBy.placerId;
+        if (placer == null || this.level.getServer() == null) {
+            return;
+        }
+        var player = this.level.getServer().getPlayerList().getPlayer(placer);
+        if (player != null) {
+            this.mainNode.setOwningPlayer(player);
+            LOGGER.info("[节点] 已按放置者补写 AE 节点 owner @ {}", this.getBlockPos());
+        }
     }
 
     /** 反射请求 EAEP 的频道卡控制器重新建立无线链路；没装 EAEP 时静默跳过。 */
