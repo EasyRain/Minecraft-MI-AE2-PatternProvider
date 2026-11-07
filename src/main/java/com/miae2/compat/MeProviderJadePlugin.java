@@ -104,11 +104,7 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
 
                 // 36 槽档位：MI 自带的容器预览对它们不输出（原因在 MI 内部），这里补一份「有内容的槽」摘要。
                 if (accessor.getBlockEntity() instanceof MeInterfaceBlockEntity be) {
-                    ListTag items = new ListTag();
-                    ListTag fluids = new ListTag();
-                    be.miae2$appendContentsPreview(items, fluids);
-                    serverData.put(TAG_ITEMS, items);
-                    serverData.put(TAG_FLUIDS, fluids);
+                    be.miae2$writeContentsPreview(serverData);
                 }
             } catch (Throwable ignored) {
                 // 悬浮提示永远不该因为一个状态读取失败而报错
@@ -116,13 +112,58 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
         }
     }
 
-    /** 把内容预览加成若干行（每行一条；服务端已经限好条数）。 */
-    private static void appendPreview(ITooltip tooltip, ListTag items, ListTag fluids) {
+    /** 用 Jade 的元素 API 渲染内容预览：物品图标 + `N× 名字`，流体图标 + `名字 1B`，最后一行 `空 xxxB`。 */
+    private static void appendPreview(ITooltip tooltip, CompoundTag serverData) {
+        var helper = snownee.jade.api.ui.IElementHelper.get();
+        ListTag items = serverData.getList("miae2Items", net.minecraft.nbt.Tag.TAG_STRING);
         for (int i = 0; i < items.size(); i++) {
-            tooltip.add(Component.literal(items.getString(i)).withStyle(ChatFormatting.GRAY));
+            String[] parts = items.getString(i).split("\\|");
+            if (parts.length != 2) {
+                continue;
+            }
+            net.minecraft.world.item.Item item =
+                    net.minecraft.core.registries.BuiltInRegistries.ITEM.get(net.minecraft.resources.ResourceLocation.parse(parts[0]));
+            long count;
+            try {
+                count = Long.parseLong(parts[1]);
+            } catch (NumberFormatException e) {
+                continue;
+            }
+            if (item == net.minecraft.world.item.Items.AIR) {
+                continue;
+            }
+            var stack = new net.minecraft.world.item.ItemStack(item);
+            tooltip.add(java.util.List.of(helper.item(stack),
+                    helper.text(Component.literal(count + "× " + stack.getHoverName().getString()))));
         }
+
+        ListTag fluids = serverData.getList("miae2Fluids", net.minecraft.nbt.Tag.TAG_STRING);
         for (int i = 0; i < fluids.size(); i++) {
-            tooltip.add(Component.literal(fluids.getString(i)).withStyle(ChatFormatting.GRAY));
+            String[] parts = fluids.getString(i).split("\\|");
+            if (parts.length != 2) {
+                continue;
+            }
+            net.minecraft.world.level.material.Fluid fluid =
+                    net.minecraft.core.registries.BuiltInRegistries.FLUID.get(net.minecraft.resources.ResourceLocation.parse(parts[0]));
+            long amount;
+            try {
+                amount = Long.parseLong(parts[1]);
+            } catch (NumberFormatException e) {
+                continue;
+            }
+            if (fluid == net.minecraft.world.level.material.Fluids.EMPTY) {
+                continue;
+            }
+            tooltip.add(java.util.List.of(
+                    helper.fluid(snownee.jade.api.fluid.JadeFluidObject.of(fluid, amount)),
+                    helper.text(Component.literal(
+                            fluid.getFluidType().getDescription().getString() + " "
+                                    + MeInterfaceBlockEntity.miae2$formatFluid(amount)))));
+        }
+
+        if (serverData.contains("miae2Free")) {
+            tooltip.add(Component.literal("空 " + MeInterfaceBlockEntity.miae2$formatFluid(serverData.getLong("miae2Free")))
+                    .withStyle(ChatFormatting.GRAY));
         }
     }
 
@@ -170,8 +211,7 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
 
                 // 36 槽接口仓的内容预览（原版档由 MI 自己的 provider 提供，别重复）
                 if (accessor.getBlockEntity() instanceof MeInterfaceBlockEntity) {
-                    appendPreview(tooltip, serverData.getList(TAG_ITEMS, net.minecraft.nbt.Tag.TAG_STRING),
-                            serverData.getList(TAG_FLUIDS, net.minecraft.nbt.Tag.TAG_STRING));
+                    appendPreview(tooltip, serverData);
                 }
             } catch (Throwable ignored) {
                 // 同上：绝不让悬浮提示因为本 mod 报错

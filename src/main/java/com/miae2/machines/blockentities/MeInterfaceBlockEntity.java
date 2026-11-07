@@ -755,22 +755,29 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
      *
      * <p>只在槽里真的有东西时才列，最多各 8 条 —— 比一屏「空 4B」可读得多。
      */
-    public void miae2$appendContentsPreview(net.minecraft.nbt.ListTag items, net.minecraft.nbt.ListTag fluids) {
-        // 格式照抄 ExtendedAE 自家接口的 Jade 显示（用户 2026-11-07 指定）：
-        //   物品：`64× 绿宝石`（每条一个非空槽）
-        //   流体：`熔岩 1B`、`水 1B` …… 再补一行汇总 `空 2.17kB`（所有流体槽的**剩余容量之和**）
+    /**
+     * 把内容预览写进 Jade 的服务端数据（**结构化**：物品 `id|count`、流体 `id|amount(mB)`、`free` 剩余容量合计）。
+     *
+     * <p>客户端据此用 Jade 的元素 API 渲染成带边框的图标行（与 ExtendedAE 自家接口的悬浮提示一致），
+     * 而不是纯文本行 —— 用户明确要「和 EAE 一样带框、简洁美观」。
+     */
+    public void miae2$writeContentsPreview(net.minecraft.nbt.CompoundTag tag) {
+        net.minecraft.nbt.ListTag items = new net.minecraft.nbt.ListTag();
+        net.minecraft.nbt.ListTag fluids = new net.minecraft.nbt.ListTag();
         int itemLines = 0;
         for (ConfigurableItemStack stack : this.itemInputs) {
-            if (!stack.isEmpty() && itemLines < 8) {
+            if (!stack.isEmpty() && itemLines < 12) {
                 items.add(net.minecraft.nbt.StringTag.valueOf(
-                        stack.getAmount() + "× " + stack.getVariant().toStack().getHoverName().getString()));
+                        net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getVariant().getItem())
+                                + "|" + stack.getAmount()));
                 itemLines++;
             }
         }
         for (ConfigurableItemStack stack : this.itemOutputs) {
-            if (!stack.isEmpty() && itemLines < 8) {
+            if (!stack.isEmpty() && itemLines < 12) {
                 items.add(net.minecraft.nbt.StringTag.valueOf(
-                        stack.getAmount() + "× " + stack.getVariant().toStack().getHoverName().getString()));
+                        net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getVariant().getItem())
+                                + "|" + stack.getAmount()));
                 itemLines++;
             }
         }
@@ -778,31 +785,31 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
         int fluidLines = 0;
         long free = 0L;
         for (ConfigurableFluidStack stack : this.fluidInputs) {
-            long capacity = stack.getCapacity();
-            free += Math.max(0L, capacity - stack.getAmount());
-            if (!stack.isEmpty() && fluidLines < 8) {
+            free += Math.max(0L, stack.getCapacity() - stack.getAmount());
+            if (!stack.isEmpty() && fluidLines < 12) {
                 fluids.add(net.minecraft.nbt.StringTag.valueOf(
-                        stack.getVariant().getFluid().getFluidType().getDescription().getString()
-                                + " " + miae2$formatFluid(stack.getAmount())));
+                        net.minecraft.core.registries.BuiltInRegistries.FLUID.getKey(stack.getVariant().getFluid())
+                                + "|" + stack.getAmount()));
                 fluidLines++;
             }
         }
         for (ConfigurableFluidStack stack : this.fluidOutputs) {
-            long capacity = stack.getCapacity();
-            free += Math.max(0L, capacity - stack.getAmount());
-            if (!stack.isEmpty() && fluidLines < 8) {
+            free += Math.max(0L, stack.getCapacity() - stack.getAmount());
+            if (!stack.isEmpty() && fluidLines < 12) {
                 fluids.add(net.minecraft.nbt.StringTag.valueOf(
-                        stack.getVariant().getFluid().getFluidType().getDescription().getString()
-                                + " " + miae2$formatFluid(stack.getAmount())));
+                        net.minecraft.core.registries.BuiltInRegistries.FLUID.getKey(stack.getVariant().getFluid())
+                                + "|" + stack.getAmount()));
                 fluidLines++;
             }
         }
-        // 汇总行：ExtendEA 对空槽也是这么显示的（`空 144B` / `空 2.17kB`）
-        fluids.add(net.minecraft.nbt.StringTag.valueOf("空 " + miae2$formatFluid(free)));
+
+        tag.put("miae2Items", items);
+        tag.put("miae2Fluids", fluids);
+        tag.putLong("miae2Free", free);
     }
 
     /** 把 mB 量格式化成 EAE 那种 `1B` / `144B` / `2.17kB` 形式（1 B = 1000 mB）。 */
-    private static String miae2$formatFluid(long milliBuckets) {
+    public static String miae2$formatFluid(long milliBuckets) {
         double buckets = milliBuckets / 1000.0;
         if (buckets >= 1000.0) {
             return String.format(java.util.Locale.ROOT, "%.2fkB", buckets / 1000.0);
