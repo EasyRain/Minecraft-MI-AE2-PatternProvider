@@ -132,8 +132,10 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
                 }
                 serverData.putBoolean(TAG_ONLINE, online);
 
-                // 36 槽档位：MI 自带的容器预览对它们不输出（原因在 MI 内部），这里补一份「有内容的槽」摘要。
-                if (accessor.getBlockEntity() instanceof MeInterfaceBlockEntity be) {
+                // 兜底：只有「标准流体存储 provider 没有被 Jade 调用」时才自己渲染流体行，
+                // 否则会和标准管道输出重复（2026-11-07 反复踩过的坑）。
+                if (!InterfaceFluidStorageProvider.wasCalled()
+                        && accessor.getBlockEntity() instanceof MeInterfaceBlockEntity be) {
                     be.miae2$writeContentsPreview(serverData);
                 }
             } catch (Throwable ignored) {
@@ -235,7 +237,8 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
                         .withStyle(ChatFormatting.GRAY));
 
                 // 36 槽接口仓的内容预览（原版档由 MI 自己的 provider 提供，别重复）
-                if (accessor.getBlockEntity() instanceof MeInterfaceBlockEntity) {
+                if (accessor.getBlockEntity() instanceof MeInterfaceBlockEntity
+                        && serverData.contains("miae2Fluids")) {
                     appendPreview(tooltip, accessor, serverData);
                 }
             } catch (Throwable ignored) {
