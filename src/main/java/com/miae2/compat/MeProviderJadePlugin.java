@@ -107,6 +107,8 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
     public void registerClient(IWailaClientRegistration registration) {
         clientRegistration = registration;
         registration.registerBlockComponent(new NodeLine(), MachineBlock.class);
+        // 流体行单独一个 provider：优先级 > MI 的物品 preview，这样顺序是「设备 → 物品 → 流体」
+        registration.registerBlockComponent(new FluidLine(), MachineBlock.class);
         registration.registerFluidStorageClient(new InterfaceFluidStorageProvider());
         LOGGER.info("[悬浮提示] Jade 插件已注册（客户端行：设备在线 / 设备离线）");
     }
@@ -149,6 +151,36 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
      *
      * <p>物品那行不在这里做：MI 自己的物品预览对我们这几个仓是可用 的，重复输出会变成两行。
      */
+    /** 流体行：优先级比 MI 的物品预览更「靠后」，保证显示顺序是 设备 → 物品 → 流体。 */
+    private static final class FluidLine implements IBlockComponentProvider {
+
+        @Override
+        public ResourceLocation getUid() {
+            return UID;
+        }
+
+        @Override
+        public int getDefaultPriority() {
+            return 2000;
+        }
+
+        @Override
+        public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
+            try {
+                if (!(accessor.getBlockEntity() instanceof MeInterfaceBlockEntity)) {
+                    return;
+                }
+                CompoundTag serverData = accessor.getServerData();
+                if (serverData == null || !serverData.contains("miae2Fluids")) {
+                    return;
+                }
+                appendPreview(tooltip, accessor, serverData);
+            } catch (Throwable ignored) {
+                // 悬浮提示永远不该因为本 mod 报错
+            }
+        }
+    }
+
     private static void appendPreview(ITooltip tooltip, BlockAccessor accessor, CompoundTag serverData) {
         ListTag fluids = serverData.getList("miae2Fluids", net.minecraft.nbt.Tag.TAG_STRING);
         for (int i = 0; i < fluids.size(); i++) {
@@ -226,12 +258,6 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
                 }
                 tooltip.add(Component.translatable(online ? KEY_ONLINE : KEY_OFFLINE)
                         .withStyle(ChatFormatting.GRAY));
-
-                // 36 槽接口仓的内容预览（原版档由 MI 自己的 provider 提供，别重复）
-                if (accessor.getBlockEntity() instanceof MeInterfaceBlockEntity
-                        && serverData.contains("miae2Fluids")) {
-                    appendPreview(tooltip, accessor, serverData);
-                }
             } catch (Throwable ignored) {
                 // 同上：绝不让悬浮提示因为本 mod 报错
             }
