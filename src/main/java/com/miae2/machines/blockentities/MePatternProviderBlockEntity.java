@@ -1235,6 +1235,13 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         if (!capacityIsTruthful) {
             return false;
         }
+        // 「发料前先看机器状态」（用户 2026-11-07 口径）：
+        // ① 机器还在做上一次的活（输出格上有机器锁）⇒ 先不发；
+        // ② 上一批产物还没抽干净（输出格非空）⇒ 先不发；
+        // ③ 输入格还压着料（上一批发出去的没被吃完）⇒ 先不发（换样板时尤其危险：两批料混在一起）。
+        if (this.miae2$machineIsBusyOrDirty()) {
+            return false;
+        }
         if (!this.insertPatternInputs(inputHolder, IActionSource.ofMachine(this))) {
             return false;
         }
@@ -1246,6 +1253,31 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
             LOGGER.info("[样板切换] 输出格已按新样板重新上锁：{} @ {}", patternDetails.getOutputs(), this.getBlockPos());
         }
         return true;
+    }
+
+    /**
+     * 发料前置检查：机器是否还在忙，或输出/输入还没清干净。
+     *
+     * <p>三条判据都很便宜，而且都是**可观测的本地状态**：
+     * <ul>
+     *   <li>输出格有**机器锁** ⇒ 阵列已经给某个配方预留了产物格，正在做；</li>
+     *   <li>输出格**非空** ⇒ 上一批产物还没被抽回网络；</li>
+     *   <li>输入格**非空** ⇒ 上一批发出去的料还没被吃完（换样板时混料最危险）。</li>
+     * </ul>
+     * 不满足就不发料，AE 会自己重试（终端显示「等待」），等机器空下来再发。
+     */
+    private boolean miae2$machineIsBusyOrDirty() {
+        for (ConfigurableItemStack stack : this.itemOutputs) {
+            if (stack.isMachineLocked() || !stack.isEmpty()) {
+                return true;
+            }
+        }
+        for (ConfigurableFluidStack stack : this.fluidOutputs) {
+            if (stack.isMachineLocked() || !stack.isEmpty()) {
+                return true;
+            }
+        }
+        return this.miae2$hasAnyInput();
     }
 
     /**
