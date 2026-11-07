@@ -47,6 +47,8 @@ public final class MeInterfacePagingClient {
     /** 隐藏槽的坐标：挪到画布外，既不渲染也点不到。 */
     private static final int HIDDEN = -100_000;
 
+    private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
+
     private MeInterfacePagingClient() {
     }
 
@@ -60,8 +62,13 @@ public final class MeInterfacePagingClient {
             return;
         }
         String path = menu.getGuiParams().blockId.getPath();
-        // 只有 36 槽的两个档位需要翻页；原版档（9 槽）保持 MI 原生界面
-        if (!path.equals("me_extended_interface_hatch") && !path.equals("me_oversize_interface_hatch")) {
+        // 机器槽数 = 机器库存里的 stack 总数（物品 + 流体），玩家背包槽不算
+        int machineSlots = menu.getMachineInventory().getItemStacks().size()
+                + menu.getMachineInventory().getFluidStacks().size();
+        // 诊断：把「打开的是哪个方块、多少个机器槽」打出来，方便判断是不是跑到了预期分支
+        LOGGER.info("[接口翻页] 打开界面 blockId={} 机器槽={}", path, machineSlots);
+        // 判据用**机器槽数**（36 槽档位 = 144 个），而不是 blockId：万一方块 id 改名也不会失效。
+        if (machineSlots < 4 * GROUP) {
             return;
         }
         new Pager(screen, event::addListener).install();
