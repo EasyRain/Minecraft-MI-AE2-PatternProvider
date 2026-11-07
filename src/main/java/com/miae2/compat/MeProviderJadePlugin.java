@@ -146,7 +146,13 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
                             + MeInterfaceBlockEntity.miae2$formatFluid(capacity)
                     : name + " " + MeInterfaceBlockEntity.miae2$formatFluid(amount);
             float ratio = capacity > 0 ? (float) Math.min(1.0, (double) amount / (double) capacity) : 0.0F;
-            tooltip.add(helper.progress(ratio, Component.literal(label), helper.progressStyle(),
+            // 进度条要「填的是流体材质」：用 ProgressStyle.overlay 把流体元素盖上去；
+            // 文字用浅灰（AE 那种），默认样式是深色，会像黑字贴在条上。
+            var style = helper.progressStyle()
+                    .overlay(helper.fluid(snownee.jade.api.fluid.JadeFluidObject.of(fluid, amount)))
+                    .textColor(0xFFAAAAAA)
+                    .fitContentX(false);
+            tooltip.add(helper.progress(ratio, Component.literal(label), style,
                     snownee.jade.api.ui.BoxStyle.getNestedBox(), false));
         }
 
