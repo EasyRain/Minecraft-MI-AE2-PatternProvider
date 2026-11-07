@@ -409,6 +409,23 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         this.mainNode.destroy();
     }
 
+    /**
+     * 放置时把<b>放置者</b>设为 AE 节点的 owner。
+     *
+     * <p>为什么必须做：ExtendedAE-Plus 的频道卡在匹配「同频 + 同所有权」时，对<b>未绑定</b>的卡会用
+     * {@code IGridNode#getOwningPlayerProfileId()}（即节点的 owner）作为回退所有者（见 EAEP 的
+     * {@code PatternProviderLogicCompatMixin#eap$getFallbackOwner}）。AE2 自己的方块在放置时会设这个 owner，
+     * 我们的 MI 仓以前没设 ⇒ 回退所有者是 {@code null}，与收发器主端的 owner 不相等 ⇒ 未绑定的频道卡连不上，
+     * 只有显式绑定过的卡能连（用户 2026-11-07 在 ATM10 上实测到的现象）。
+     */
+    @Override
+    public void onPlaced(net.minecraft.world.entity.LivingEntity entity, net.minecraft.world.item.ItemStack stack) {
+        super.onPlaced(entity, stack);
+        if (entity instanceof Player player) {
+            this.mainNode.setOwningPlayer(player);
+        }
+    }
+
     @Override
     public void tick() {
         super.tick();

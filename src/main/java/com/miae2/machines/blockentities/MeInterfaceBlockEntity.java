@@ -143,6 +143,18 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
         this.mainNode.destroy();
     }
 
+    /**
+     * 放置时把放置者设为 AE 节点 owner —— 与样板仓同一理由：EAEP 的频道卡对「未绑定」的卡会用
+     * {@code IGridNode#getOwningPlayerProfileId()} 作为回退所有者做匹配，没有 owner 就连不上。
+     */
+    @Override
+    public void onPlaced(net.minecraft.world.entity.LivingEntity entity, net.minecraft.world.item.ItemStack stack) {
+        super.onPlaced(entity, stack);
+        if (entity instanceof net.minecraft.world.entity.player.Player player) {
+            this.mainNode.setOwningPlayer(player);
+        }
+    }
+
     @Override
     public void tick() {
         super.tick();
