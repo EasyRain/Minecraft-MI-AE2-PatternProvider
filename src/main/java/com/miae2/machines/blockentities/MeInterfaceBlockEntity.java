@@ -118,6 +118,10 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
     private final AEKey[] mirrorFluidKey;
     private final long[] mirrorFluidAmount;
 
+    /** 玩家塞进 MI 槽、但 AE storage 收不下的余量（覆盖时加回去，避免丢物）。 */
+    private final long[] spillItemAmount;
+    private final long[] spillFluidAmount;
+
     /** 读档初始化只做一次（见 tick()）。 */
     private boolean loadInitDone;
 
@@ -145,6 +149,8 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
         this.mirrorItemAmount = new long[this.slots];
         this.mirrorFluidKey = new AEKey[this.slots];
         this.mirrorFluidAmount = new long[this.slots];
+        this.spillItemAmount = new long[this.slots];
+        this.spillFluidAmount = new long[this.slots];
         this.hatchType = hatchType;
         this.iconSupplier = iconSupplier;
 
@@ -352,30 +358,29 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
             AEKey key = storage.getKey(i);
             long target = storage.getAmount(i);
             if (key instanceof AEItemKey itemKey) {
-                // 先把上一 tick 镜像后被消耗掉的量从 AE storage 扣掉
-                this.miae2$reconcileItem(i, itemKey, storage);
+                // 先对账（被吃掉就扣 AE、玩家塞进来就收进 AE），拿到「该显示多少」
+                long itemTarget = this.miae2$reconcileItem(i, itemKey, storage);
                 fluidSlot.empty();
                 this.mirrorFluidKey[i] = null;
                 this.mirrorFluidAmount[i] = 0L;
-                // 再把目标量写进 MI 槽位（键不同就换键）
-                if (target <= 0) {
+                if (itemTarget <= 0) {
                     itemSlot.empty();
                 } else {
                     itemSlot.setKey(ItemVariant.of(itemKey.toStack(1)));
-                    itemSlot.setAmount(Math.min(target, itemSlot.getCapacity()));
+                    itemSlot.setAmount(itemTarget);
                 }
                 this.mirrorItemKey[i] = itemKey;
                 this.mirrorItemAmount[i] = itemSlot.getAmount();
             } else if (key instanceof AEFluidKey fluidKey) {
-                this.miae2$reconcileFluid(i, fluidKey, storage);
+                long fluidTarget = this.miae2$reconcileFluid(i, fluidKey, storage);
                 itemSlot.empty();
                 this.mirrorItemKey[i] = null;
                 this.mirrorItemAmount[i] = 0L;
-                if (target <= 0) {
+                if (fluidTarget <= 0) {
                     fluidSlot.empty();
                 } else {
                     fluidSlot.setKey(FluidVariant.of(fluidKey.getFluid()));
-                    fluidSlot.setAmount(Math.min(target, fluidSlot.getCapacity()));
+                    fluidSlot.setAmount(fluidTarget);
                 }
                 this.mirrorFluidKey[i] = fluidKey;
                 this.mirrorFluidAmount[i] = fluidSlot.getAmount();
@@ -391,28 +396,48 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
         }
     }
 
-    /** MI 物品槽变少 = 被多方块吃掉（或被玩家取走）⇒ 从 AE storage 扣等量。 */
-    private void miae2$reconcileItem(int i, AEItemKey key, GenericStackInv storage) {
+    /**
+     * 对账：MI 物品槽与上一 tick 的镜像值比较，处理两个方向的差额。
+     *
+     * @return 覆盖后该槽应该显示的数量（AE 侧数量 + 塞不进去的余量）
+     */
+    private long miae2$reconcileItem(int i, AEItemKey key, GenericStackInv storage) {
         if (!key.equals(this.mirrorItemKey[i])) {
-            return;
+            return storage.getAmount(i);
         }
         long now = this.itemInputs.get(i).getAmount();
-        long consumed = this.mirrorItemAmount[i] - now;
-        if (consumed > 0) {
-            storage.extract(i, key, consumed, Actionable.MODULATE);
+        long prev = this.mirrorItemAmount[i];
+        if (now < prev) {
+            // 被多方块吃掉 / 被玩家取走 ⇒ 从 AE storage 扣
+            storage.extract(i, key, prev - now, Actionable.MODULATE);
+        } else if (now > prev) {
+            // 玩家手动塞进来的 ⇒ 尽量塞进 AE storage，塞不下的留在槽里（绝不丢）
+            long extra = now - prev;
+            long accepted = storage.insert(i, key, extra, Actionable.MODULATE);
+            this.spillItemAmount[i] = extra - accepted;
         }
+        long desired = storage.getAmount(i) + this.spillItemAmount[i];
+        this.spillItemAmount[i] = 0L;
+        return desired;
     }
 
     /** 流体的同上。 */
-    private void miae2$reconcileFluid(int i, AEFluidKey key, GenericStackInv storage) {
+    private long miae2$reconcileFluid(int i, AEFluidKey key, GenericStackInv storage) {
         if (!key.equals(this.mirrorFluidKey[i])) {
-            return;
+            return storage.getAmount(i);
         }
         long now = this.fluidInputs.get(i).getAmount();
-        long consumed = this.mirrorFluidAmount[i] - now;
-        if (consumed > 0) {
-            storage.extract(i, key, consumed, Actionable.MODULATE);
+        long prev = this.mirrorFluidAmount[i];
+        if (now < prev) {
+            storage.extract(i, key, prev - now, Actionable.MODULATE);
+        } else if (now > prev) {
+            long extra = now - prev;
+            long accepted = storage.insert(i, key, extra, Actionable.MODULATE);
+            this.spillFluidAmount[i] = extra - accepted;
         }
+        long desired = storage.getAmount(i) + this.spillFluidAmount[i];
+        this.spillFluidAmount[i] = 0L;
+        return desired;
     }
 
     /**
