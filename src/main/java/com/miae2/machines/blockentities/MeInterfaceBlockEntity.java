@@ -6,25 +6,42 @@ import appeng.api.networking.IGridNodeListener;
 import appeng.api.networking.IInWorldGridNodeHost;
 import appeng.api.networking.IManagedGridNode;
 import appeng.api.networking.security.IActionHost;
+import appeng.api.config.Actionable;
+import appeng.api.networking.IGrid;
+import appeng.api.networking.security.IActionSource;
+import appeng.api.stacks.AEFluidKey;
 import appeng.api.stacks.AEItemKey;
+import appeng.api.stacks.AEKey;
+import appeng.api.storage.MEStorage;
+import appeng.helpers.externalstorage.GenericStackInv;
 import appeng.api.util.AECableType;
 import appeng.helpers.InterfaceLogicHost;
+import appeng.menu.MenuOpener;
+import appeng.menu.implementations.InterfaceMenu;
+import appeng.menu.locator.MenuLocators;
 import aztech.modern_industrialization.inventory.ConfigurableFluidStack;
 import aztech.modern_industrialization.inventory.ConfigurableItemStack;
 import aztech.modern_industrialization.inventory.MIInventory;
 import aztech.modern_industrialization.inventory.SlotPositions;
+import aztech.modern_industrialization.thirdparty.fabrictransfer.api.fluid.FluidVariant;
+import aztech.modern_industrialization.thirdparty.fabrictransfer.api.item.ItemVariant;
 import aztech.modern_industrialization.machines.BEP;
 import aztech.modern_industrialization.machines.MachineBlockEntity;
+import aztech.modern_industrialization.machines.MachineComponent;
 import aztech.modern_industrialization.machines.components.OrientationComponent;
 import aztech.modern_industrialization.machines.gui.MachineGuiParameters;
 import aztech.modern_industrialization.machines.multiblocks.HatchBlockEntity;
 import aztech.modern_industrialization.machines.multiblocks.HatchType;
 import com.miae2.ae.MeInterfaceLogic;
 import com.miae2.util.IControllerPosHolder;
+import com.mojang.logging.LogUtils;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.level.ServerPlayer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup.Provider;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.Nameable;
@@ -55,6 +72,11 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
         IActionHost, Nameable, IControllerPosHolder {
 
     /** 槽位区几何，与样板仓保持一致（第一行 y、行距、底部余量）。 */
+    private static final org.slf4j.Logger LOGGER = LogUtils.getLogger();
+
+    /** 接口仓的配置槽数量（原版档 9；扩展/超大档 36）。 */
+    public static final int INTERFACE_SLOTS = 9;
+
     public static final int SLOT_FIRST_ROW_Y = 20;
     public static final int SLOT_ROW_HEIGHT = 18;
     public static final int GUI_BOTTOM_MARGIN = 100;
@@ -81,6 +103,25 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
 
     /** 多方块控制器位置（成形时由 ShapeMatcherMixin 写入；接口仓暂时只记录）。 */
     private BlockPos controllerPos;
+
+    /**
+     * 上一 tick 镜像到 MI 侧的「键 + 数量」，用于识别**被多方块吃掉 / 被玩家取走**的量。
+     *
+     * <p>AE 侧 {@code InterfaceLogic.getStorage()} 是唯一真相，但多方块只认 MI 的
+     * {@code ConfigurableItemStack}/{@code ConfigurableFluidStack}（按 {@code StorageView} 读写）。
+     * 所以每 tick 把 AE 内容镜像到 MI 槽位；发现 MI 侧变少 = 被消耗 ⇒ 从 AE storage 扣掉等量，
+     * 随后 AE 自己按配置补货，等于「多方块用掉的从网络补」。
+     */
+    private final AEKey[] mirrorItemKey = new AEKey[INTERFACE_SLOTS];
+    private final long[] mirrorItemAmount = new long[INTERFACE_SLOTS];
+    private final AEKey[] mirrorFluidKey = new AEKey[INTERFACE_SLOTS];
+    private final long[] mirrorFluidAmount = new long[INTERFACE_SLOTS];
+
+    /** 让位状态（同阵列样板仓有订单在飞）：MI 侧输入要「看不见、抽不走」。 */
+    private boolean yielding;
+
+    /** 让位锁是否已施加（接口仓按用户口径：让位时清空后全锁 AIR，结束后还原）。 */
+    private boolean yieldLocked;
 
     public MeInterfaceBlockEntity(
             BEP bep,
@@ -146,6 +187,7 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
                 .setInWorldNode(true)
                 .setTagName("me_interface");
         this.logic = new MeInterfaceLogic(this.mainNode, this, iconSupplier.get(), tier);
+        this.registerComponents(new InterfaceNbtComponent());
     }
 
     // ---------- 生命周期 ----------
@@ -175,8 +217,10 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
             return;
         }
         this.miae2$ensureNode();
-        // TODO ② 输出缓冲抽回 AE（MEStorage.insert），塞不进的留在缓冲
-        // TODO ③ 让位判定：同阵列样板仓是否还有任务 ⇒ 锁/解锁输出（复用样板仓的 CraftingInFlight 判定）
+        this.yielding = this.miae2$providerOrderActive();
+        this.miae2$syncInputsFromInterface();
+        this.miae2$drainOutputsToNetwork();
+        this.miae2$updateYieldLocks();
     }
 
     /** 节点创建兜底（样板仓里是同样的写法，理由见那里的注释）。 */
@@ -186,7 +230,189 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
         }
     }
 
+    // ---------- AE ⇄ MI 同步（接口语义的核心） ----------
+
+    /**
+     * 把 AE 侧配置槽的内容镜像到 MI 侧输入槽位，并按索引一一对应（AE 第 i 槽 ⇄ MI 物品/流体第 i 槽）。
+     *
+     * <p>一个 AE 槽同时只能是一种键（物品或流体），所以「物品第 i 槽」与「流体第 i 槽」互斥生效。
+     * 让位期间把两边都清空 ⇒ 多方块读不到、也抽不走（正是用户要的「屏蔽输入」）。
+     */
+    private void miae2$syncInputsFromInterface() {
+        GenericStackInv storage = this.logic.getStorage();
+        int slots = Math.min(storage.size(), INTERFACE_SLOTS);
+        for (int i = 0; i < INTERFACE_SLOTS; i++) {
+            ConfigurableItemStack itemSlot = this.itemInputs.get(i);
+            ConfigurableFluidStack fluidSlot = this.fluidInputs.get(i);
+
+            if (this.yielding || i >= slots) {
+                // 让位 / 超出配置槽：清空 MI 侧视图与快照（**不**动 AE storage）
+                itemSlot.empty();
+                fluidSlot.empty();
+                this.mirrorItemKey[i] = null;
+                this.mirrorItemAmount[i] = 0L;
+                this.mirrorFluidKey[i] = null;
+                this.mirrorFluidAmount[i] = 0L;
+                continue;
+            }
+
+            AEKey key = storage.getKey(i);
+            long target = storage.getAmount(i);
+            if (key instanceof AEItemKey itemKey) {
+                // 先把上一 tick 镜像后被消耗掉的量从 AE storage 扣掉
+                this.miae2$reconcileItem(i, itemKey, storage);
+                fluidSlot.empty();
+                this.mirrorFluidKey[i] = null;
+                this.mirrorFluidAmount[i] = 0L;
+                // 再把目标量写进 MI 槽位（键不同就换键）
+                if (target <= 0) {
+                    itemSlot.empty();
+                } else {
+                    itemSlot.setKey(ItemVariant.of(itemKey.toStack(1)));
+                    itemSlot.setAmount(Math.min(target, itemSlot.getCapacity()));
+                }
+                this.mirrorItemKey[i] = itemKey;
+                this.mirrorItemAmount[i] = itemSlot.getAmount();
+            } else if (key instanceof AEFluidKey fluidKey) {
+                this.miae2$reconcileFluid(i, fluidKey, storage);
+                itemSlot.empty();
+                this.mirrorItemKey[i] = null;
+                this.mirrorItemAmount[i] = 0L;
+                if (target <= 0) {
+                    fluidSlot.empty();
+                } else {
+                    fluidSlot.setKey(FluidVariant.of(fluidKey.getFluid()));
+                    fluidSlot.setAmount(Math.min(target, fluidSlot.getCapacity()));
+                }
+                this.mirrorFluidKey[i] = fluidKey;
+                this.mirrorFluidAmount[i] = fluidSlot.getAmount();
+            } else {
+                // 该槽没有配置内容：两边都清空
+                itemSlot.empty();
+                fluidSlot.empty();
+                this.mirrorItemKey[i] = null;
+                this.mirrorItemAmount[i] = 0L;
+                this.mirrorFluidKey[i] = null;
+                this.mirrorFluidAmount[i] = 0L;
+            }
+        }
+    }
+
+    /** MI 物品槽变少 = 被多方块吃掉（或被玩家取走）⇒ 从 AE storage 扣等量。 */
+    private void miae2$reconcileItem(int i, AEItemKey key, GenericStackInv storage) {
+        if (!key.equals(this.mirrorItemKey[i])) {
+            return;
+        }
+        long now = this.itemInputs.get(i).getAmount();
+        long consumed = this.mirrorItemAmount[i] - now;
+        if (consumed > 0) {
+            storage.extract(i, key, consumed, Actionable.MODULATE);
+        }
+    }
+
+    /** 流体的同上。 */
+    private void miae2$reconcileFluid(int i, AEFluidKey key, GenericStackInv storage) {
+        if (!key.equals(this.mirrorFluidKey[i])) {
+            return;
+        }
+        long now = this.fluidInputs.get(i).getAmount();
+        long consumed = this.mirrorFluidAmount[i] - now;
+        if (consumed > 0) {
+            storage.extract(i, key, consumed, Actionable.MODULATE);
+        }
+    }
+
+    /**
+     * 输出缓冲抽回 AE 网络。
+     *
+     * <p>接口仓的输出槽**不接 AE 配置**（用户口径）：机器产出的东西直接塞回网络，塞不进的留在缓冲里
+     * （断网时内容不丢，且能通过扳手界面手动取出）。
+     */
+    private void miae2$drainOutputsToNetwork() {
+        IGrid grid = this.mainNode.getGrid();
+        if (grid == null) {
+            return;
+        }
+        MEStorage network = grid.getStorageService().getInventory();
+        IActionSource source = IActionSource.empty();
+        boolean changed = false;
+
+        for (ConfigurableItemStack out : this.itemOutputs) {
+            if (out.isEmpty()) {
+                continue;
+            }
+            long amount = out.getAmount();
+            if (amount <= 0) {
+                continue;
+            }
+            long inserted = network.insert(AEItemKey.of(out.toStack()), amount, Actionable.MODULATE, source);
+            if (inserted > 0) {
+                out.decrement(inserted);
+                changed = true;
+            }
+        }
+        for (ConfigurableFluidStack out : this.fluidOutputs) {
+            if (out.isEmpty()) {
+                continue;
+            }
+            long amount = out.getAmount();
+            if (amount <= 0) {
+                continue;
+            }
+            long inserted = network.insert(AEFluidKey.of(out.getVariant().getFluid()), amount, Actionable.MODULATE, source);
+            if (inserted > 0) {
+                out.decrement(inserted);
+                changed = true;
+            }
+        }
+        if (changed) {
+            this.setChanged();
+        }
+    }
+
+    /**
+     * 让位时锁输出（用户口径：接口仓也是**先清空全部锁（含玩家锁）再全锁 AIR**，结束后还原）。
+     *
+     * <p>还原暂时退化为「全解」——等 MI 侧 GUI 做出来、玩家能真正设锁之后，再补快照还原。
+     */
+    private void miae2$updateYieldLocks() {
+        if (this.yielding && !this.yieldLocked) {
+            this.yieldLocked = true;
+            for (ConfigurableItemStack out : this.itemOutputs) {
+                if (out.isPlayerLocked()) {
+                    out.togglePlayerLock();
+                }
+            }
+            for (ConfigurableFluidStack out : this.fluidOutputs) {
+                if (out.isPlayerLocked()) {
+                    out.togglePlayerLock();
+                }
+            }
+            for (ConfigurableItemStack out : this.itemOutputs) {
+                out.togglePlayerLock();
+            }
+            for (ConfigurableFluidStack out : this.fluidOutputs) {
+                out.togglePlayerLock();
+            }
+            this.setChanged();
+        } else if (!this.yielding && this.yieldLocked) {
+            this.yieldLocked = false;
+            for (ConfigurableItemStack out : this.itemOutputs) {
+                if (out.isPlayerLocked()) {
+                    out.togglePlayerLock();
+                }
+            }
+            for (ConfigurableFluidStack out : this.fluidOutputs) {
+                if (out.isPlayerLocked()) {
+                    out.togglePlayerLock();
+                }
+            }
+            this.setChanged();
+        }
+    }
+
     // ---------- IInWorldGridNodeHost ----------
+
 
     @Nullable
     @Override
@@ -224,7 +450,50 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
         this.setChanged();
     }
 
+    /**
+     * 把 {@code InterfaceLogic} 的配置槽 / 库存 / 优先级 / 升级卡挂到 MI 的组件存档系统上。
+     *
+     * <p>MI 的 {@code saveAdditional}/{@code loadAdditional} 是 final，只能走 {@link MachineComponent}；
+     * 好消息是 AE2 的 {@code InterfaceLogic#writeToNBT/readFromNBT} 签名与组件接口完全一致。
+     */
+    private final class InterfaceNbtComponent implements MachineComponent {
+        private static final String KEY = "miae2_interface";
+
+        @Override
+        public void writeNbt(CompoundTag tag, Provider registries) {
+            CompoundTag sub = new CompoundTag();
+            MeInterfaceBlockEntity.this.logic.writeToNBT(sub, registries);
+            tag.put(KEY, sub);
+        }
+
+        @Override
+        public void readNbt(CompoundTag tag, Provider registries, boolean client) {
+            if (tag.contains(KEY)) {
+                MeInterfaceBlockEntity.this.logic.readFromNBT(tag.getCompound(KEY), registries);
+            }
+        }
+    }
+
+    /**
+     * 右键打开 AE2 原版 ME 接口界面（配置槽 / 保持量 / 优先级）。
+     *
+     * <p>AE2 的 {@code InterfaceMenu} 泛型参数是 {@code InterfaceLogicHost}（不是它自己的方块实体），
+     * 所以只要能提供 host 就能直接复用它的菜单 —— 与样板仓复用 ExtendedAE 菜单同一手法。
+     * 打不开时退回 MI 的槽位界面，绝不让服务端线程崩（可选类加载失败也不能崩服）。
+     */
+    @Override
+    public void openMenu(ServerPlayer player) {
+        try {
+            MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(this));
+            return;
+        } catch (LinkageError | RuntimeException e) {
+            LOGGER.warn("[界面] AE 接口界面打开失败，退回 MI 槽位界面 @ {}", this.getBlockPos(), e);
+        }
+        super.openMenu(player);
+    }
+
     // ---------- InterfaceLogicHost ----------
+
 
     @NotNull
     @Override
