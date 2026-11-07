@@ -33,6 +33,10 @@ public class MeHatchOverlayRenderer implements BlockEntityRenderer<HatchBlockEnt
     private static final float LO = -OUT;
     private static final float HI = 1.0f + OUT;
 
+    private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
+    private static final java.util.concurrent.atomic.AtomicBoolean LOGGED =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+
     @Override
     public void render(HatchBlockEntity be, float partialTick, PoseStack poseStack, MultiBufferSource buffers,
                        int packedLight, int packedOverlay) {
@@ -43,8 +47,13 @@ public class MeHatchOverlayRenderer implements BlockEntityRenderer<HatchBlockEnt
         TextureAtlasSprite sprite = Minecraft.getInstance()
                 .getTextureAtlas(InventoryMenu.BLOCK_ATLAS)
                 .apply(OVERLAY);
-        VertexConsumer vc = buffers.getBuffer(RenderType.entityCutout(TextureAtlas.LOCATION_BLOCKS));
+        // 用 entityCutoutNoCull：上面四组顶点的绕序是「从方块外侧看顺时针」，
+        // 若用带剔除的 RenderType 会被当背面整面剔掉（实测表现为「成型后完全看不见」）。
+        VertexConsumer vc = buffers.getBuffer(RenderType.entityCutoutNoCull(TextureAtlas.LOCATION_BLOCKS));
         PoseStack.Pose pose = poseStack.last();
+        if (LOGGED.compareAndSet(false, true)) {
+            LOGGER.info("[overlay] 首次绘制成型仓 overlay @ {}（sprite={}）", be.getBlockPos(), sprite.contents().name());
+        }
 
         float u0 = sprite.getU0();
         float u1 = sprite.getU1();
