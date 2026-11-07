@@ -30,7 +30,9 @@ public class HatchFlagsMixin {
     public void miae2$allows(HatchType type, CallbackInfoReturnable<Boolean> cir) {
         if (type == ModHatches.ME_PATTERN_PROVIDER
                 || type == ModHatches.ME_EXTENDED_PATTERN_PROVIDER
-                || type == ModHatches.ME_INTERFACE) {
+                || type == ModHatches.ME_INTERFACE
+                || type == ModHatches.ME_EXTENDED_INTERFACE
+                || type == ModHatches.ME_OVERSIZE_INTERFACE) {
             cir.setReturnValue(
                     this.allowed.contains(HatchTypes.ITEM_INPUT)
                             || this.allowed.contains(HatchTypes.FLUID_INPUT)

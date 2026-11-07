@@ -57,7 +57,7 @@ import org.jetbrains.annotations.Nullable;
  * 一个 AE 侧逻辑类 + MI 的槽位组件。区别只在于 AE 侧逻辑换成 {@link MeInterfaceLogic}
  * （{@code InterfaceLogic} 的子类）。
  *
- * <p><b>当前进度：只有骨架</b>。已具备：注册、AE 节点、9+9 输入 + 9+9 输出槽位、AE 接口逻辑实例。
+ * <p><b>当前进度</b>：核心语义已实现（镜像同步 / 输出抽回 / 让位 / NBT / AE 界面）。槽数按档位（9 或 36）。
  * <b>尚未实现</b>（都在下面的 TODO 里）：
  * <ol>
  *   <li>AE 配置槽 ⇄ MI 物品/流体输入槽的<b>按索引映射视图</b>（设计 §4.5「映射方案」）</li>
@@ -74,8 +74,8 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
     /** 槽位区几何，与样板仓保持一致（第一行 y、行距、底部余量）。 */
     private static final org.slf4j.Logger LOGGER = LogUtils.getLogger();
 
-    /** 接口仓的配置槽数量（原版档 9；扩展/超大档 36）。 */
-    public static final int INTERFACE_SLOTS = 9;
+    /** 配置槽数量（按档位：原版 9 / 扩展与超大 36）。构造时确定，之后只读。 */
+    private final int slots;
 
     public static final int SLOT_FIRST_ROW_Y = 20;
     public static final int SLOT_ROW_HEIGHT = 18;
@@ -112,10 +112,10 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
      * 所以每 tick 把 AE 内容镜像到 MI 槽位；发现 MI 侧变少 = 被消耗 ⇒ 从 AE storage 扣掉等量，
      * 随后 AE 自己按配置补货，等于「多方块用掉的从网络补」。
      */
-    private final AEKey[] mirrorItemKey = new AEKey[INTERFACE_SLOTS];
-    private final long[] mirrorItemAmount = new long[INTERFACE_SLOTS];
-    private final AEKey[] mirrorFluidKey = new AEKey[INTERFACE_SLOTS];
-    private final long[] mirrorFluidAmount = new long[INTERFACE_SLOTS];
+    private final AEKey[] mirrorItemKey;
+    private final long[] mirrorItemAmount;
+    private final AEKey[] mirrorFluidKey;
+    private final long[] mirrorFluidAmount;
 
     /** 读档初始化只做一次（见 tick()）。 */
     private boolean loadInitDone;
@@ -139,6 +139,11 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
             Supplier<Item> iconSupplier
     ) {
         super(bep, guiParams, OrientationComponent.Params.noFacingNoOutput());
+        this.slots = tier.configSlots();
+        this.mirrorItemKey = new AEKey[this.slots];
+        this.mirrorItemAmount = new long[this.slots];
+        this.mirrorFluidKey = new AEKey[this.slots];
+        this.mirrorFluidAmount = new long[this.slots];
         this.hatchType = hatchType;
         this.iconSupplier = iconSupplier;
 
@@ -322,12 +327,12 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
      */
     private void miae2$syncInputsFromInterface() {
         GenericStackInv storage = this.logic.getStorage();
-        int slots = Math.min(storage.size(), INTERFACE_SLOTS);
-        for (int i = 0; i < INTERFACE_SLOTS; i++) {
+        int storageSlots = Math.min(storage.size(), this.slots);
+        for (int i = 0; i < this.slots; i++) {
             ConfigurableItemStack itemSlot = this.itemInputs.get(i);
             ConfigurableFluidStack fluidSlot = this.fluidInputs.get(i);
 
-            if (this.yielding || i >= slots) {
+            if (this.yielding || i >= storageSlots) {
                 // 让位 / 超出配置槽：清空 MI 侧视图与快照（**不**动 AE storage）
                 itemSlot.empty();
                 fluidSlot.empty();
@@ -594,7 +599,11 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
     @Override
     public void openMenu(ServerPlayer player) {
         try {
-            MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(this));
+            switch (this.logic.tier()) {
+                case BASE -> MenuOpener.open(InterfaceMenu.TYPE, player, MenuLocators.forBlockEntity(this));
+                case EXTENDED -> com.miae2.ae.ExtendedAeInterfaceMenuCompat.openExtended(player, MenuLocators.forBlockEntity(this));
+                case OVERSIZE -> com.miae2.ae.ExtendedAeInterfaceMenuCompat.openOversize(player, MenuLocators.forBlockEntity(this));
+            }
             return;
         } catch (LinkageError | RuntimeException e) {
             LOGGER.warn("[界面] AE 接口界面打开失败，退回 MI 槽位界面 @ {}", this.getBlockPos(), e);

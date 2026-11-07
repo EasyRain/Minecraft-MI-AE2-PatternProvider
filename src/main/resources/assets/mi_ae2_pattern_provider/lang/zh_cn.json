@@ -23,5 +23,7 @@
   "mod.mi_ae2_pattern_provider": "MI AE2 样板供应器",
   "message.mi_ae2_pattern_provider.quantum_needs_array": "量子超频模块仅支持处理阵列",
   "text.mi_ae2_pattern_provider.device_online": "设备在线",
-  "text.mi_ae2_pattern_provider.device_offline": "设备离线"
+  "text.mi_ae2_pattern_provider.device_offline": "设备离线",
+  "block.modern_industrialization.me_extended_interface_hatch": "ME扩展接口仓",
+  "block.modern_industrialization.me_oversize_interface_hatch": "ME超大接口仓"
 }

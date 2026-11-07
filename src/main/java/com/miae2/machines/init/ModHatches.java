@@ -42,7 +42,23 @@ public final class ModHatches {
             MI.id("me_interface_hatch")
     );
 
+    /** 接口仓的扩展档（36 槽，复用 ExtendedAE 的扩展接口界面；需要 ExtendedAE）。 */
+    public static final HatchType ME_EXTENDED_INTERFACE = HatchTypes.register(
+            ResourceLocation.fromNamespaceAndPath(MiAe2PatternProvider.MOD_ID, "me_extended_interface"),
+            MI.id("me_extended_interface_hatch")
+    );
+
+    /** 接口仓的超大档（36 槽，容量 1024 物品 / 64B 流体；需要 ExtendedAE）。 */
+    public static final HatchType ME_OVERSIZE_INTERFACE = HatchTypes.register(
+            ResourceLocation.fromNamespaceAndPath(MiAe2PatternProvider.MOD_ID, "me_oversize_interface"),
+            MI.id("me_oversize_interface_hatch")
+    );
+
     // ---- ME 接口仓的槽位（原版档：两进两出，各 9 格 = 1 页 4 排 × 9）----
+    // 扩展 / 超大档的槽数（36 = 4 页 × 9）
+    public static final int INTERFACE_EXTENDED_SLOTS = 36;
+    public static final int INTERFACE_OVERSIZE_SLOTS = 36;
+
     public static final int INTERFACE_ITEM_INPUT_SLOTS = 9;
     public static final int INTERFACE_ITEM_OUTPUT_SLOTS = 9;
     public static final int INTERFACE_FLUID_INPUT_SLOTS = 9;
@@ -83,6 +99,8 @@ public final class ModHatches {
     public static MachineDefinition<MePatternProviderBlockEntity> ME_PATTERN_PROVIDER_BLOCK;
     public static MachineDefinition<MePatternProviderBlockEntity> ME_EXTENDED_PATTERN_PROVIDER_BLOCK;
     public static MachineDefinition<MeInterfaceBlockEntity> ME_INTERFACE_BLOCK;
+    public static MachineDefinition<MeInterfaceBlockEntity> ME_EXTENDED_INTERFACE_BLOCK;
+    public static MachineDefinition<MeInterfaceBlockEntity> ME_OVERSIZE_INTERFACE_BLOCK;
 
     private ModHatches() {
     }
@@ -101,6 +119,14 @@ public final class ModHatches {
         MachineCasings.create(
                 ResourceLocation.fromNamespaceAndPath(MiAe2PatternProvider.MOD_ID, "me_interface_hatch"),
                 "ME Interface Hatch"
+        );
+        MachineCasings.create(
+                ResourceLocation.fromNamespaceAndPath(MiAe2PatternProvider.MOD_ID, "me_extended_interface_hatch"),
+                "ME Extended Interface Hatch"
+        );
+        MachineCasings.create(
+                ResourceLocation.fromNamespaceAndPath(MiAe2PatternProvider.MOD_ID, "me_oversize_interface_hatch"),
+                "ME Oversize Interface Hatch"
         );
 
         ME_PATTERN_PROVIDER_BLOCK = MachineRegistrationHelper.registerMachine(
@@ -140,7 +166,7 @@ public final class ModHatches {
                 "me_interface_hatch",
                 bet -> new MeInterfaceBlockEntity(
                         bet,
-                        interfaceGuiParams(),
+                        interfaceGuiParams(INTERFACE_ITEM_INPUT_SLOTS, INTERFACE_FLUID_INPUT_SLOTS),
                         INTERFACE_ITEM_INPUT_SLOTS, INTERFACE_ITEM_OUTPUT_SLOTS,
                         INTERFACE_FLUID_INPUT_SLOTS, INTERFACE_FLUID_OUTPUT_SLOTS,
                         INTERFACE_FLUID_CAPACITY,
@@ -151,14 +177,53 @@ public final class ModHatches {
                 MachineBlockEntity::registerItemApi,
                 MachineBlockEntity::registerFluidApi
         );
+        registerInterfaceTiers();
     }
 
-    /** 接口仓的 GUI 参数（原版档：4 排 = 192 高，见 {@link MeInterfaceBlockEntity#requiredGuiHeight}）。 */
-    private static MachineGuiParameters interfaceGuiParams() {
+    private static MachineDefinition<MeInterfaceBlockEntity> registerInterfaceVariant(
+            String englishName, String blockId, MeInterfaceLogic.Tier tier, HatchType hatchType,
+            int itemSlots, int fluidSlots, long fluidCapacity) {
+        return MachineRegistrationHelper.registerMachine(
+                englishName,
+                blockId,
+                bet -> new MeInterfaceBlockEntity(
+                        bet,
+                        interfaceGuiParams(itemSlots, fluidSlots),
+                        itemSlots, itemSlots, fluidSlots, fluidSlots,
+                        fluidCapacity,
+                        tier,
+                        hatchType,
+                        () -> (blockId.equals("me_interface_hatch")
+                                ? ME_INTERFACE_BLOCK
+                                : blockId.equals("me_extended_interface_hatch")
+                                        ? ME_EXTENDED_INTERFACE_BLOCK
+                                        : ME_OVERSIZE_INTERFACE_BLOCK).blockDefinition().asItem()
+                ),
+                MachineBlockEntity::registerItemApi,
+                MachineBlockEntity::registerFluidApi
+        );
+    }
+
+    // 扩展档 / 超大档：界面复用 ExtendedAE 的 ContainerExInterface，所以需要 ExtendedAE
+    private static void registerInterfaceTiers() {
+        if (!ModList.get().isLoaded("extendedae")) {
+            return;
+        }
+        ME_EXTENDED_INTERFACE_BLOCK = registerInterfaceVariant(
+                "ME Extended Interface", "me_extended_interface_hatch",
+                MeInterfaceLogic.Tier.EXTENDED, ME_EXTENDED_INTERFACE,
+                INTERFACE_EXTENDED_SLOTS, INTERFACE_EXTENDED_SLOTS, INTERFACE_FLUID_CAPACITY);
+        ME_OVERSIZE_INTERFACE_BLOCK = registerInterfaceVariant(
+                "ME Oversize Interface", "me_oversize_interface_hatch",
+                MeInterfaceLogic.Tier.OVERSIZE, ME_OVERSIZE_INTERFACE,
+                INTERFACE_OVERSIZE_SLOTS, INTERFACE_OVERSIZE_SLOTS, 64_000L);
+    }
+
+    /** 接口仓的 GUI 参数（按槽位行数算高度）。 */
+    private static MachineGuiParameters interfaceGuiParams(int itemSlots, int fluidSlots) {
         return new MachineGuiParameters.Builder("me_interface_hatch", true)
                 .backgroundHeight(MeInterfaceBlockEntity.requiredGuiHeight(
-                        INTERFACE_ITEM_INPUT_SLOTS, INTERFACE_ITEM_OUTPUT_SLOTS,
-                        INTERFACE_FLUID_INPUT_SLOTS, INTERFACE_FLUID_OUTPUT_SLOTS))
+                        itemSlots, itemSlots, fluidSlots, fluidSlots))
                 .build();
     }
 

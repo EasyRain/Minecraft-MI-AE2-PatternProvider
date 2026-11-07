@@ -23,5 +23,7 @@
   "mod.mi_ae2_pattern_provider": "MI AE2 Pattern Provider",
   "message.mi_ae2_pattern_provider.quantum_needs_array": "The Quantum Overclock Module only supports Processing Arrays",
   "text.mi_ae2_pattern_provider.device_online": "Device Online",
-  "text.mi_ae2_pattern_provider.device_offline": "Device Offline"
+  "text.mi_ae2_pattern_provider.device_offline": "Device Offline",
+  "block.modern_industrialization.me_extended_interface_hatch": "ME Extended Interface Hatch",
+  "block.modern_industrialization.me_oversize_interface_hatch": "ME Oversize Interface Hatch"
 }
