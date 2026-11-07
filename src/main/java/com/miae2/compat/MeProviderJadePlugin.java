@@ -68,16 +68,46 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
     /** 与 AE2 的 {@code TooltipProvider.DEFAULT_PRIORITY} 一致，保持这一行在提示里的位置不变。 */
     private static final int PRIORITY = 1000;
 
+    /** 捕获 Jade 给的两个注册句柄，用于「加载完再注册一次」（最后注册者胜）。 */
+    private static IWailaCommonRegistration commonRegistration;
+    private static IWailaClientRegistration clientRegistration;
+
+    /**
+     * 在 `FMLLoadCompleteEvent` 里再注册一次流体存储 provider。
+     *
+     * <p>原因：Jade 的存储 provider 表是「一个类 → 一个 provider」，MI 给 `MachineBlockEntity`
+     * 也注册了，谁的注册晚谁生效。我们在插件 `register()` 里那次会被 MI 覆盖掉
+     * （实测 `getGroups` 一次都没被调用），所以必须等所有 mod 加载完再补一次。
+     */
+    public static void reRegisterFluidStorageLate() {
+        try {
+            if (commonRegistration != null) {
+                commonRegistration.registerFluidStorage(new InterfaceFluidStorageProvider(),
+                        MeInterfaceBlockEntity.class);
+            }
+            if (clientRegistration != null) {
+                clientRegistration.registerFluidStorageClient(new InterfaceFluidStorageProvider());
+            }
+            LOGGER.info("[悬浮提示] 流体存储 provider 已延迟补注册（覆盖 MI 的同类型注册）");
+        } catch (Throwable t) {
+            LOGGER.warn("[悬浮提示] 流体存储 provider 延迟注册失败", t);
+        }
+    }
+
     @Override
     public void register(IWailaCommonRegistration registration) {
         registration.registerBlockDataProvider(new NodeData(), MePatternProviderBlockEntity.class);
+        commonRegistration = registration;
         registration.registerBlockDataProvider(new NodeData(), MeInterfaceBlockEntity.class);
+        registration.registerFluidStorage(new InterfaceFluidStorageProvider(), MeInterfaceBlockEntity.class);
         LOGGER.info("[悬浮提示] Jade 插件已注册（服务端数据：网格节点在线状态）");
     }
 
     @Override
     public void registerClient(IWailaClientRegistration registration) {
+        clientRegistration = registration;
         registration.registerBlockComponent(new NodeLine(), MachineBlock.class);
+        registration.registerFluidStorageClient(new InterfaceFluidStorageProvider());
         LOGGER.info("[悬浮提示] Jade 插件已注册（客户端行：设备在线 / 设备离线）");
     }
 

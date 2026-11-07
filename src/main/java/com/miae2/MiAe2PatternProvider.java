@@ -102,6 +102,8 @@ public class MiAe2PatternProvider {
         // 接口仓同理：必须等所有 mod 的 common setup 跑完再扫，否则会漏掉 EAEP 等附属登记的卡
         // （2026-11-07 实测：放在 FMLCommonSetupEvent 里扫不到 EAEP 的频道卡）。
         event.enqueueWork(com.miae2.ae.InterfaceUpgrades::register);
+        // 流体存储 provider 必须最后注册一次（MI 也注册了同类型，晚者生效）。
+        event.enqueueWork(com.miae2.compat.MeProviderJadePlugin::reRegisterFluidStorageLate);
     }
 
     /**
