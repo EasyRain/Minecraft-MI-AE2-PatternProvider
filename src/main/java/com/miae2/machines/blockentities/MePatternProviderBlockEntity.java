@@ -133,6 +133,17 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
     /** 空闲计时（见 updateActivePattern()）。 */
     private int idleTicks;
 
+    /**
+     * 「本仓这一份样板已交付完毕」的去抖计时（见 {@link #updateActivePattern()}）。
+     *
+     * <p>与 {@link #idleTicks} 分开的原因：多仓单活里，A 交完自己那一份后**整单可能还在跑**（要 B 接着做），
+     * 全局 CPU 一定还是忙的；如果拿「整单结束」当放行条件，A 永远不放手、B 永远进不来 —— 死等。
+     */
+    private int claimIdleTicks;
+
+    /** 「本仓交付完毕」需要连续这么多 tick（避开同一单内两次发配之间的空隙）。 */
+    private static final int CLAIM_RELEASE_TICKS = 40;
+
     // 多方块控制器（处理阵列）的位置，由 ShapeMatcherMixin 在成形时写入
     private BlockPos controllerPos;
 
@@ -1368,6 +1379,25 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
             return;
         }
         this.miae2$releaseYieldLocks();
+
+        // 本仓这一份**已交付完毕** ⇒ 立刻放掉 claim（不要求整单结束）。
+        // 判据三合一：产物不再被请求 + 输入空（料已吃掉）+ 输出空（产物已回网）。
+        // 这样 A 做完铜板后 B 能接金锭，不会再出现「A 等整单、B 等 A」的互等。
+        if (this.activePattern != null
+                && !this.isPatternRequested()
+                && !this.miae2$hasAnyInput()
+                && !this.miae2$hasAnyOutput()) {
+            if (++this.claimIdleTicks >= CLAIM_RELEASE_TICKS) {
+                this.claimIdleTicks = 0;
+                this.activePattern = null;
+                this.unlockAllOutputs();
+                this.setChanged();
+                this.sync();
+                LOGGER.info("[多仓单活] 本仓样板已交付完毕，释放 claim 让出阵列 @ {}", this.getBlockPos());
+            }
+            return;
+        }
+        this.claimIdleTicks = 0;
 
         boolean requested = this.activePattern != null
                 ? this.isPatternRequested()
