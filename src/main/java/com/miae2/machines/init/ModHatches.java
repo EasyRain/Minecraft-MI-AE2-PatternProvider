@@ -58,6 +58,13 @@ public final class ModHatches {
     // 扩展 / 超大档的槽数（36 = 4 页 × 9）
     public static final int INTERFACE_EXTENDED_SLOTS = 36;
     public static final int INTERFACE_OVERSIZE_SLOTS = 36;
+    /**
+     * 扩展 / 超大档的**输出**槽数（每类 18 = 2 排）。
+     *
+     * <p>输出只是断网缓冲，不需要和输入一样多；18 + 18 恰好一页（2 排物品 + 2 排流体），
+     * 于是 MI 侧翻页正好三页：物品入 / 流体入 / 输出。2026-11-07 用户定的版式。
+     */
+    public static final int INTERFACE_TIER_OUTPUT_SLOTS = 18;
 
     public static final int INTERFACE_ITEM_INPUT_SLOTS = 9;
     public static final int INTERFACE_ITEM_OUTPUT_SLOTS = 9;
@@ -183,6 +190,7 @@ public final class ModHatches {
     private static MachineDefinition<MeInterfaceBlockEntity> registerInterfaceVariant(
             String englishName, String blockId, MeInterfaceLogic.Tier tier, HatchType hatchType,
             int itemSlots, int fluidSlots, long fluidCapacity) {
+        int outSlots = INTERFACE_TIER_OUTPUT_SLOTS;
         return MachineRegistrationHelper.registerMachine(
                 englishName,
                 blockId,
@@ -191,7 +199,7 @@ public final class ModHatches {
                         // 界面高度只按**一页 4 行**算：36 槽档位靠客户端翻页，一页永远只显示 4 行
                         // （物品入 2 行 + 物品出 2 行，或流体入 2 行 + 流体出 2 行），与原版档同高 192。
                         interfaceGuiParams(blockId),
-                        itemSlots, itemSlots, fluidSlots, fluidSlots,
+                        itemSlots, outSlots, fluidSlots, outSlots,
                         fluidCapacity,
                         tier,
                         hatchType,

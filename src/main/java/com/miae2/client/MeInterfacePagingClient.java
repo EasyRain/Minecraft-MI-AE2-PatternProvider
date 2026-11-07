@@ -39,6 +39,8 @@ public final class MeInterfacePagingClient {
 
     /** 每个槽组 36 个（扩展 / 超大档）。 */
     private static final int GROUP = 36;
+    /** 每类输出槽数（2 排）。 */
+    private static final int OUT_GROUP = 18;
     private static final int ROWS_VISIBLE = 4;
     private static final int COLS = 9;
     private static final int FIRST_ROW_Y = 20;
@@ -110,7 +112,7 @@ public final class MeInterfacePagingClient {
         }
 
         private void setPage(int requested) {
-            int clamped = Math.max(0, Math.min(3, requested));
+            int clamped = Math.max(0, Math.min(2, requested));
             if (clamped == this.page) {
                 return;
             }
@@ -136,27 +138,30 @@ public final class MeInterfacePagingClient {
                     itemSlots.add(slot);
                 }
             }
-            if (itemSlots.size() < GROUP * 2 || fluidSlots.size() < GROUP * 2) {
+            // 每组 = 输入 36 + 输出 18 = 54
+            int perType = GROUP + OUT_GROUP;
+            if (itemSlots.size() < perType || fluidSlots.size() < perType) {
                 LOGGER.warn("[接口翻页] 槽位分组不符预期（物品 {} / 流体 {}，每组需要 {}），跳过布局",
-                        itemSlots.size(), fluidSlots.size(), GROUP * 2);
+                        itemSlots.size(), fluidSlots.size(), perType);
                 return;
             }
             // 先全部隐藏
-            for (int i = 0; i < GROUP * 2; i++) {
+            for (int i = 0; i < perType; i++) {
                 setPos(itemSlots.get(i), HIDDEN, HIDDEN);
                 setPos(fluidSlots.get(i), HIDDEN, HIDDEN);
             }
 
-            // 4 页分工（每页 4 排 = 36 格，输入整组在前、输出整组在后）：
-            //   页 0 = 物品入 0–35    页 1 = 流体入 0–35
-            //   页 2 = 物品出 0–35    页 3 = 流体出 0–35
-            // 这样每页的「长相」完全不同（物品 / 水滴 / 产物），一眼就能看出翻了页；
-            // 输出单独放在后两页，配置与取产物互不干扰。
+            // 3 页（每页 4 排 = 36 格，输出集中在最后一页）：
+            //   页 0 = 物品入 0–35（4 排）
+            //   页 1 = 流体入 0–35（4 排）
+            //   页 2 = 物品出 0–17（2 排）+ 流体出 0–17（2 排）
             switch (this.page) {
                 case 0 -> place(itemSlots.subList(0, GROUP), 0);
                 case 1 -> place(fluidSlots.subList(0, GROUP), 0);
-                case 2 -> place(itemSlots.subList(GROUP, GROUP * 2), 0);
-                default -> place(fluidSlots.subList(GROUP, GROUP * 2), 0);
+                default -> {
+                    place(itemSlots.subList(GROUP, GROUP + OUT_GROUP), 0);
+                    place(fluidSlots.subList(GROUP, GROUP + OUT_GROUP), 2);
+                }
             }
         }
 
