@@ -560,15 +560,25 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         return new ItemStack(this.iconSupplier.get());
     }
 
-    /** 右键打开 AE2 的样板供应器界面（放样板），而不是 MI 的槽位界面。 */
+    /**
+     * 右键打开 AE2 的样板供应器界面（放样板），而不是 MI 的槽位界面。
+     *
+     * <p>扩展仓走 ExtendedAE 自己的扩展供应器菜单（EAEP 的样板分页注入在那两个类上）。
+     * 但那条路**引用了可选 mod 的类**：如果 ExtendedAE 缺失、版本不匹配，或类加载本身失败
+     * （实测过一次：客户端运行中被替换 jar ⇒ `NoClassDefFoundError`），绝不能把服务端线程带崩 ——
+     * 退回普通样板界面即可，玩家至少还能放样板、改配置。2026-11-07 用户实测崩溃后加的兜底。
+     */
     @Override
     public void openMenu(ServerPlayer player) {
         if (this.extended) {
-            // 用 ExtendedAE 自己的扩展供应器菜单：ExtendedAE-Plus 的样板分页注入在那两个类上
-            ExtendedAeMenuCompat.openExtendedPatternProvider(player, MenuLocators.forBlockEntity(this));
-        } else {
-            MenuOpener.open(PatternProviderMenu.TYPE, player, MenuLocators.forBlockEntity(this));
+            try {
+                ExtendedAeMenuCompat.openExtendedPatternProvider(player, MenuLocators.forBlockEntity(this));
+                return;
+            } catch (LinkageError | RuntimeException e) {
+                LOGGER.warn("[界面] 扩展供应仓菜单打开失败，退回普通样板界面 @ {}", this.getBlockPos(), e);
+            }
         }
+        MenuOpener.open(PatternProviderMenu.TYPE, player, MenuLocators.forBlockEntity(this));
     }
 
     /** 是否是扩展仓（4 页样板容量）。 */
