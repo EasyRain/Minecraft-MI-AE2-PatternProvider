@@ -72,16 +72,12 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
     public void register(IWailaCommonRegistration registration) {
         registration.registerBlockDataProvider(new NodeData(), MePatternProviderBlockEntity.class);
         registration.registerBlockDataProvider(new NodeData(), MeInterfaceBlockEntity.class);
-        // 36 槽接口仓的流体内容走 Jade 标准管道（与 AE / ExtendedAE 同样的渲染）
-        registration.registerFluidStorage(new InterfaceFluidStorageProvider(), MeInterfaceBlockEntity.class);
         LOGGER.info("[悬浮提示] Jade 插件已注册（服务端数据：网格节点在线状态）");
     }
 
     @Override
     public void registerClient(IWailaClientRegistration registration) {
         registration.registerBlockComponent(new NodeLine(), MachineBlock.class);
-        // 流体存储的**客户端**渲染器（只注册服务端的话数据取到了也没人画）
-        registration.registerFluidStorageClient(new InterfaceFluidStorageProvider());
         LOGGER.info("[悬浮提示] Jade 插件已注册（客户端行：设备在线 / 设备离线）");
     }
 
@@ -107,7 +103,9 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
                 serverData.putBoolean(TAG_ONLINE, online);
 
                 // 36 槽档位：MI 自带的容器预览对它们不输出（原因在 MI 内部），这里补一份「有内容的槽」摘要。
-
+                if (accessor.getBlockEntity() instanceof MeInterfaceBlockEntity be) {
+                    be.miae2$writeContentsPreview(serverData);
+                }
             } catch (Throwable ignored) {
                 // 悬浮提示永远不该因为一个状态读取失败而报错
             }
@@ -207,7 +205,9 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
                         .withStyle(ChatFormatting.GRAY));
 
                 // 36 槽接口仓的内容预览（原版档由 MI 自己的 provider 提供，别重复）
-                // 流体内容由 Jade 标准流体存储管道渲染（InterfaceFluidStorageProvider），这里不再手画
+                if (accessor.getBlockEntity() instanceof MeInterfaceBlockEntity) {
+                    appendPreview(tooltip, accessor, serverData);
+                }
             } catch (Throwable ignored) {
                 // 同上：绝不让悬浮提示因为本 mod 报错
             }

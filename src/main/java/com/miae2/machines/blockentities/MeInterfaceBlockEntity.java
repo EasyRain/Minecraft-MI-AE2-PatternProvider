@@ -804,16 +804,6 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
         return String.format(java.util.Locale.ROOT, "%.0fB", buckets);
     }
 
-    /** 流体输入槽（供 Jade 标准流体存储管道读取）。 */
-    public java.util.List<ConfigurableFluidStack> miae2$fluidInputsAll() {
-        return this.fluidInputs;
-    }
-
-    /** 流体输出槽。 */
-    public java.util.List<ConfigurableFluidStack> miae2$fluidOutputsAll() {
-        return this.fluidOutputs;
-    }
-
     /** 网格节点是否在线（供 Jade / TOP 显示「设备在线 / 设备离线」，与样板仓一致）。 */
     public boolean miae2$isNodeOnline() {
         var node = this.mainNode.getNode();
