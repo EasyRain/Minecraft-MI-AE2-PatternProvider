@@ -706,6 +706,11 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
         return true;
     }
 
+    /** 配置槽数量（9 = 原版档；36 = 扩展/超大档）。供菜单守卫判断该走哪套界面。 */
+    public int miae2$configSlots() {
+        return this.logic.getConfig().size();
+    }
+
     @Override
     public void openMenu(ServerPlayer player) {
         boolean opened = false;
