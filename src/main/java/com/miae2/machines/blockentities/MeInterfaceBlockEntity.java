@@ -475,9 +475,17 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
                 }
             }
             for (ConfigurableItemStack out : this.itemOutputs) {
+                // 关键：连**机器锁**一起清掉。订单期间阵列可能已经先把产物锁在接口的输出格上
+                // （machine lock，显示成「绿宝石板 + 数量」的占位），只加玩家锁是压不住它的。
+                if (out.isMachineLocked()) {
+                    out.disableMachineLock();
+                }
                 out.togglePlayerLock();
             }
             for (ConfigurableFluidStack out : this.fluidOutputs) {
+                if (out.isMachineLocked()) {
+                    out.disableMachineLock();
+                }
                 out.togglePlayerLock();
             }
             this.setChanged();
