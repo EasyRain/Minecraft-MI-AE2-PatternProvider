@@ -66,7 +66,9 @@ public final class MeInterfacePagingClient {
         int machineSlots = menu.getMachineInventory().getItemStacks().size()
                 + menu.getMachineInventory().getFluidStacks().size();
         // 诊断：把「打开的是哪个方块、多少个机器槽」打出来，方便判断是不是跑到了预期分支
-        LOGGER.info("[接口翻页] 打开界面 blockId={} 机器槽={}", path, machineSlots);
+        var mi = menu.getMachineInventory();
+        LOGGER.info("[接口翻页] 打开界面 blockId={} menu.slots={} 机器槽(库存)={} 物品栈={} 流体栈={}",
+                path, menu.slots.size(), machineSlots, mi.getItemStacks().size(), mi.getFluidStacks().size());
         // 判据用**机器槽数**（36 槽档位 = 144 个），而不是 blockId：万一方块 id 改名也不会失效。
         if (machineSlots < 4 * GROUP) {
             return;
@@ -118,36 +120,49 @@ public final class MeInterfacePagingClient {
 
         /** 按当前页把 144 个机器槽重新摆位（其余挪出画布）。 */
         private void layout() {
-            List<Slot> slots = this.screen.getMenu().slots;
-            if (slots.size() < GROUP * 4) {
+            // 分类而**不依赖菜单里的索引顺序**：
+            // - 玩家背包槽（container 是 player Inventory）一律不动；
+            // - 机器槽里，MFluidSlot 是流体槽，其余是物品槽；
+            // - 每组内部按「先输入后输出」切分（与 BE 构造 SlotPositions 的顺序一致）。
+            List<Slot> itemSlots = new java.util.ArrayList<>();
+            List<Slot> fluidSlots = new java.util.ArrayList<>();
+            for (Slot slot : this.screen.getMenu().slots) {
+                if (slot.container instanceof net.minecraft.world.entity.player.Inventory) {
+                    continue;
+                }
+                if (slot.getClass().getSimpleName().contains("Fluid")) {
+                    fluidSlots.add(slot);
+                } else {
+                    itemSlots.add(slot);
+                }
+            }
+            if (itemSlots.size() < GROUP * 2 || fluidSlots.size() < GROUP * 2) {
+                LOGGER.warn("[接口翻页] 槽位分组不符预期（物品 {} / 流体 {}，每组需要 {}），跳过布局",
+                        itemSlots.size(), fluidSlots.size(), GROUP * 2);
                 return;
             }
-            // 先全部隐藏，再摆当前页
-            for (int i = 0; i < GROUP * 4; i++) {
-                setPos(slots.get(i), HIDDEN, HIDDEN);
+            // 先全部隐藏
+            for (int i = 0; i < GROUP * 2; i++) {
+                setPos(itemSlots.get(i), HIDDEN, HIDDEN);
+                setPos(fluidSlots.get(i), HIDDEN, HIDDEN);
             }
 
-            // 每页两组：输入组 + 输出组；组内偏移由页决定（0 或 18）
+            // 页 0/1 = 物品，页 2/3 = 流体；每页两组（输入 + 输出），组内偏移 0 或 18
             int half = (this.page % 2) * 18;
-            int inputGroup = this.page < 2 ? 0 : 2 * GROUP;      // 页 1/2 = 物品，页 3/4 = 流体
-            int outputGroup = inputGroup + GROUP;
+            List<Slot> inGroup = this.page < 2 ? itemSlots.subList(0, GROUP) : fluidSlots.subList(0, GROUP);
+            List<Slot> outGroup = this.page < 2 ? itemSlots.subList(GROUP, GROUP * 2)
+                    : fluidSlots.subList(GROUP, GROUP * 2);
 
-            place(slots, inputGroup, half, 0);        // 输入：第 0、1 行
-            place(slots, outputGroup, half, 2);       // 输出：第 2、3 行
+            place(inGroup, half, 0);   // 输入：第 0、1 行
+            place(outGroup, half, 2);  // 输出：第 2、3 行
         }
 
-        private void place(List<Slot> slots, int groupStart, int offsetInGroup, int startRow) {
-            for (int n = 0; n < 18; n++) {
-                int index = groupStart + offsetInGroup + n;
-                if (index >= groupStart + GROUP) {
-                    return;
-                }
+        /** 把某组里从 {@code offset} 起的 18 个槽摆到 {@code startRow} 起的 2 行。 */
+        private void place(List<Slot> group, int offset, int startRow) {
+            for (int n = 0; n < 18 && offset + n < group.size(); n++) {
                 int row = startRow + n / COLS;
                 int col = n % COLS;
-                if (row >= startRow + 2) {
-                    return;
-                }
-                setPos(slots.get(index), FIRST_COL_X + col * ROW_HEIGHT, FIRST_ROW_Y + row * ROW_HEIGHT);
+                setPos(group.get(offset + n), FIRST_COL_X + col * ROW_HEIGHT, FIRST_ROW_Y + row * ROW_HEIGHT);
             }
         }
 
