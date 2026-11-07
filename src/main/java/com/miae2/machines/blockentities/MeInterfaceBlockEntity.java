@@ -366,6 +366,10 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
             }
         }
         if (changed) {
+            // 诊断日志（每 200 tick 最多一条）：确认产物确实被抽回网络，而不是「凭空消失」。
+            if (this.level != null && this.level.getGameTime() % 200L == 0L) {
+                LOGGER.info("[接口仓] 产物已抽回网络 @ {}", this.getBlockPos());
+            }
             this.setChanged();
         }
     }
