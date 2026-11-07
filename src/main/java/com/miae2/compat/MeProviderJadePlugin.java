@@ -112,53 +112,40 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
         }
     }
 
-    /** 用 Jade 的元素 API 渲染内容预览：物品图标 + `N× 名字`，流体图标 + `名字 1B`，最后一行 `空 xxxB`。 */
+    /**
+     * 渲染流体预览：每行「图标 + `1B / 64B`」，用 Jade 的盒子包一圈 —— 就是原版 AE / Jade 标准胶囊样式。
+     *
+     * <p>物品那行不在这里做：MI 自己的物品预览对我们这几个仓是可用 的，重复输出会变成两行。
+     */
     private static void appendPreview(ITooltip tooltip, CompoundTag serverData) {
         var helper = snownee.jade.api.ui.IElementHelper.get();
-        ListTag items = serverData.getList("miae2Items", net.minecraft.nbt.Tag.TAG_STRING);
-        for (int i = 0; i < items.size(); i++) {
-            String[] parts = items.getString(i).split("\\|");
-            if (parts.length != 2) {
-                continue;
-            }
-            net.minecraft.world.item.Item item =
-                    net.minecraft.core.registries.BuiltInRegistries.ITEM.get(net.minecraft.resources.ResourceLocation.parse(parts[0]));
-            long count;
-            try {
-                count = Long.parseLong(parts[1]);
-            } catch (NumberFormatException e) {
-                continue;
-            }
-            if (item == net.minecraft.world.item.Items.AIR) {
-                continue;
-            }
-            var stack = new net.minecraft.world.item.ItemStack(item);
-            tooltip.add(java.util.List.of(helper.item(stack),
-                    helper.text(Component.literal(count + "× " + stack.getHoverName().getString()))));
-        }
-
         ListTag fluids = serverData.getList("miae2Fluids", net.minecraft.nbt.Tag.TAG_STRING);
         for (int i = 0; i < fluids.size(); i++) {
             String[] parts = fluids.getString(i).split("\\|");
-            if (parts.length != 2) {
+            if (parts.length != 3) {
                 continue;
             }
             net.minecraft.world.level.material.Fluid fluid =
                     net.minecraft.core.registries.BuiltInRegistries.FLUID.get(net.minecraft.resources.ResourceLocation.parse(parts[0]));
-            long amount;
-            try {
-                amount = Long.parseLong(parts[1]);
-            } catch (NumberFormatException e) {
-                continue;
-            }
             if (fluid == net.minecraft.world.level.material.Fluids.EMPTY) {
                 continue;
             }
-            tooltip.add(java.util.List.of(
+            long amount;
+            long capacity;
+            try {
+                amount = Long.parseLong(parts[1]);
+                capacity = Long.parseLong(parts[2]);
+            } catch (NumberFormatException e) {
+                continue;
+            }
+            var inner = new snownee.jade.impl.Tooltip();
+            inner.add(java.util.List.of(
                     helper.fluid(snownee.jade.api.fluid.JadeFluidObject.of(fluid, amount)),
                     helper.text(Component.literal(
                             fluid.getFluidType().getDescription().getString() + " "
-                                    + MeInterfaceBlockEntity.miae2$formatFluid(amount)))));
+                                    + MeInterfaceBlockEntity.miae2$formatFluid(amount) + " / "
+                                    + MeInterfaceBlockEntity.miae2$formatFluid(capacity)))));
+            tooltip.add(helper.box(inner, snownee.jade.api.ui.BoxStyle.getNestedBox()));
         }
 
         if (serverData.contains("miae2Free")) {

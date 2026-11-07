@@ -761,49 +761,36 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
      * <p>客户端据此用 Jade 的元素 API 渲染成带边框的图标行（与 ExtendedAE 自家接口的悬浮提示一致），
      * 而不是纯文本行 —— 用户明确要「和 EAE 一样带框、简洁美观」。
      */
+    /**
+     * 把**流体**内容写进 Jade 服务端数据（物品那行 MI 自己会显示，这里不重复）。
+     *
+     * <p>格式：`miae2Fluids` = 若干 `流体id|当前量(mB)|每格容量(mB)`，`miae2Free` = 所有流体槽剩余容量合计。
+     * 客户端据此渲染成「原版 AE / Jade 标准胶囊行」：图标 + `1B / 64B`，并带边框。
+     */
     public void miae2$writeContentsPreview(net.minecraft.nbt.CompoundTag tag) {
-        net.minecraft.nbt.ListTag items = new net.minecraft.nbt.ListTag();
         net.minecraft.nbt.ListTag fluids = new net.minecraft.nbt.ListTag();
-        int itemLines = 0;
-        for (ConfigurableItemStack stack : this.itemInputs) {
-            if (!stack.isEmpty() && itemLines < 12) {
-                items.add(net.minecraft.nbt.StringTag.valueOf(
-                        net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getVariant().getItem())
-                                + "|" + stack.getAmount()));
-                itemLines++;
-            }
-        }
-        for (ConfigurableItemStack stack : this.itemOutputs) {
-            if (!stack.isEmpty() && itemLines < 12) {
-                items.add(net.minecraft.nbt.StringTag.valueOf(
-                        net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getVariant().getItem())
-                                + "|" + stack.getAmount()));
-                itemLines++;
-            }
-        }
-
-        int fluidLines = 0;
+        int lines = 0;
         long free = 0L;
         for (ConfigurableFluidStack stack : this.fluidInputs) {
-            free += Math.max(0L, stack.getCapacity() - stack.getAmount());
-            if (!stack.isEmpty() && fluidLines < 12) {
+            long capacity = stack.getCapacity();
+            free += Math.max(0L, capacity - stack.getAmount());
+            if (!stack.isEmpty() && lines < 12) {
                 fluids.add(net.minecraft.nbt.StringTag.valueOf(
                         net.minecraft.core.registries.BuiltInRegistries.FLUID.getKey(stack.getVariant().getFluid())
-                                + "|" + stack.getAmount()));
-                fluidLines++;
+                                + "|" + stack.getAmount() + "|" + capacity));
+                lines++;
             }
         }
         for (ConfigurableFluidStack stack : this.fluidOutputs) {
-            free += Math.max(0L, stack.getCapacity() - stack.getAmount());
-            if (!stack.isEmpty() && fluidLines < 12) {
+            long capacity = stack.getCapacity();
+            free += Math.max(0L, capacity - stack.getAmount());
+            if (!stack.isEmpty() && lines < 12) {
                 fluids.add(net.minecraft.nbt.StringTag.valueOf(
                         net.minecraft.core.registries.BuiltInRegistries.FLUID.getKey(stack.getVariant().getFluid())
-                                + "|" + stack.getAmount()));
-                fluidLines++;
+                                + "|" + stack.getAmount() + "|" + capacity));
+                lines++;
             }
         }
-
-        tag.put("miae2Items", items);
         tag.put("miae2Fluids", fluids);
         tag.putLong("miae2Free", free);
     }
