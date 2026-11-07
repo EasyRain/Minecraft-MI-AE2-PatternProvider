@@ -56,6 +56,14 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
     private static final ResourceLocation UID =
             ResourceLocation.fromNamespaceAndPath(MiAe2PatternProvider.MOD_ID, "grid_node");
 
+    /**
+     * 流体行的 UID，**必须与 {@link #UID} 不同** —— Jade 在 `FMLLoadCompleteEvent` 里会校验
+     * 「UID → provider」唯一性，撞 UID 直接 `IllegalStateException: Duplicate UID` 崩游戏
+     * （2026-11-08 实测）。
+     */
+    private static final ResourceLocation FLUID_UID =
+            ResourceLocation.fromNamespaceAndPath(MiAe2PatternProvider.MOD_ID, "grid_node_fluids");
+
     private static final String TAG_ONLINE = "miae2NodeOnline";
     /** 36 槽接口仓的内容预览（物品条目 / 流体条目，各上限若干条）。 */
     private static final String TAG_ITEMS = "miae2Items";
@@ -156,7 +164,7 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
 
         @Override
         public ResourceLocation getUid() {
-            return UID;
+            return FLUID_UID;
         }
 
         @Override
