@@ -655,6 +655,85 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
      * <p>判据只看「对方有没有订单在飞」，不看 CPU 忙不忙：CPU 是**全网**的，
      * 用它会让不同阵列互相让位。
      */
+    /**
+     * 同阵列里是否**别的**供应仓 push 过订单、且还没收尾 —— 多仓单活仲裁的**严格**判据。
+     *
+     * <p>为什么不用 {@link #miae2$hasActiveOrder()}（含 {@code isAnyPatternRequested()}）：
+     * 两个仓装同一张样板时，网络请求该产物会让**两个仓**的判据都为真 ⇒ 互相认为对方在忙 ⇒ 双锁死。
+     * 只有「我 push 过、还没收尾」这个状态才真正代表**这个仓当前在干活**。
+     */
+    public boolean miae2$anotherProviderHasPushedPattern() {
+        if (this.level == null || this.providerSiblingPositions.isEmpty()) {
+            return false;
+        }
+        for (BlockPos pos : this.providerSiblingPositions) {
+            if (this.level.getBlockEntity(pos) instanceof MePatternProviderBlockEntity other
+                    && other.activePattern != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // ---------- 让位锁（多仓单活） ----------
+
+    /** 让位锁是否已施加（用于精确还原玩家自己设的锁）。 */
+    private boolean yieldLocksApplied;
+    private boolean[] yieldItemLocks = new boolean[0];
+    private boolean[] yieldFluidLocks = new boolean[0];
+
+    /**
+     * 让位时锁住**全部**输出格（含已有残料的格）。
+     *
+     * <p>只锁空格（{@code lockAllEmpty}）不够：残料所在的格仍然对外报告可接纳空间，
+     * 阵列会把活动仓的产物塞进这里 ⇒ 活动仓永远等不到自己的产物。锁之前先快照玩家锁，
+     * 释放时按快照还原，绝不误清玩家自己设的锁。
+     */
+    private void miae2$applyYieldLocks() {
+        if (this.yieldLocksApplied) {
+            return;
+        }
+        this.yieldLocksApplied = true;
+        this.yieldItemLocks = new boolean[this.itemOutputs.size()];
+        for (int i = 0; i < this.itemOutputs.size(); i++) {
+            ConfigurableItemStack stack = this.itemOutputs.get(i);
+            this.yieldItemLocks[i] = stack.isPlayerLocked();
+            if (!stack.isPlayerLocked()) {
+                stack.togglePlayerLock();
+            }
+        }
+        this.yieldFluidLocks = new boolean[this.fluidOutputs.size()];
+        for (int i = 0; i < this.fluidOutputs.size(); i++) {
+            ConfigurableFluidStack stack = this.fluidOutputs.get(i);
+            this.yieldFluidLocks[i] = stack.isPlayerLocked();
+            if (!stack.isPlayerLocked()) {
+                stack.togglePlayerLock();
+            }
+        }
+    }
+
+    /** 释放让位锁：只把「我们加的锁」去掉，快照里本来就有锁的格保持不动。 */
+    private void miae2$releaseYieldLocks() {
+        if (!this.yieldLocksApplied) {
+            return;
+        }
+        this.yieldLocksApplied = false;
+        for (int i = 0; i < this.itemOutputs.size() && i < this.yieldItemLocks.length; i++) {
+            ConfigurableItemStack stack = this.itemOutputs.get(i);
+            if (!this.yieldItemLocks[i] && stack.isPlayerLocked()) {
+                stack.togglePlayerLock();
+            }
+        }
+        for (int i = 0; i < this.fluidOutputs.size() && i < this.yieldFluidLocks.length; i++) {
+            ConfigurableFluidStack stack = this.fluidOutputs.get(i);
+            if (!this.yieldFluidLocks[i] && stack.isPlayerLocked()) {
+                stack.togglePlayerLock();
+            }
+        }
+        this.yieldItemLocks = new boolean[0];
+        this.yieldFluidLocks = new boolean[0];
+    }
+
     public boolean miae2$anotherProviderActive() {
         if (this.level == null || this.providerSiblingPositions.isEmpty()) {
             return false;
@@ -1276,6 +1355,20 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         // ⚠️ activePattern 是瞬态字段（不进 NBT），**读档后必为 null**。此时绝不能当成"没有请求"，
         //    否则会把 AE 排队中、正在用的材料退回网络（AE 的合成队列是持久化的，读档后依然挂着）。
         //    所以没有 activePattern 时，改问"本供应器**任何**样板的产物还有没有被请求"。
+        //
+        // 多仓单活仲裁**必须排在最前面**（2026-11-07 修）：以前把它放在 requested / cpuBusy 之后，
+        // 而「阵列里有订单」时 CPU 一定是忙的 ⇒ 让位分支永远走不到 ⇒ 另一个仓的输出没被锁，
+        // 产物照旧落进去，活动仓等不到自己的产物就挂住。
+        // 判据用 strictly「对方 push 过订单且还没收尾」（activePattern != null），
+        // **不能**用对方的 isAnyPatternRequested() —— 两个仓装同一张样板时那两个都会为真，
+        // 会互相认为对方在忙而双锁死。
+        if (this.activePattern == null && this.miae2$anotherProviderHasPushedPattern()) {
+            this.miae2$applyYieldLocks();
+            this.idleTicks = 0;
+            return;
+        }
+        this.miae2$releaseYieldLocks();
+
         boolean requested = this.activePattern != null
                 ? this.isPatternRequested()
                 : this.miae2$isAnyPatternRequested();
@@ -1285,15 +1378,6 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         }
         // 网格上还有 CPU 在跑任务（哪怕当前没有产物在途）→ 任务一定还没结束，绝不能回收/解锁。
         if (this.miae2$isAnyCpuBusy()) {
-            this.idleTicks = 0;
-            return;
-        }
-        // 多仓单活仲裁：同阵列里有别的供应仓正在做订单 ⇒ 本仓让位。
-        // 做法与接口仓同一套：把输出空间锁 0（产物无处可去，只能进活动仓），并且不再接新订单
-        // （接单拦截在 MePatternProviderLogic#pushPattern）。不清料、不回收，等对方做完自然恢复。
-        if (this.activePattern == null && this.miae2$anotherProviderActive()) {
-            this.lockAllEmpty(this.itemOutputs);
-            this.lockAllEmpty(this.fluidOutputs);
             this.idleTicks = 0;
             return;
         }

@@ -76,7 +76,7 @@ public class MePatternProviderLogic extends PatternProviderLogic {
         // 多仓单活仲裁：同阵列里别的供应仓正在做订单 ⇒ 本仓拒绝接单（AE 会重试）。
         // 必须拒绝而不只是「不锁输出」：若两仓同刻都接单，两仓输出都会解锁，产物归属又会不确定
         // —— 那正是当初「一个阵列只能一个供应仓」的原因。
-        if (this.be.miae2$anotherProviderActive()) {
+        if (this.be.miae2$anotherProviderHasPushedPattern()) {
             return false;
         }
         // 原版「锁定合成模式」（LOCK_WHILE_LOW / LOCK_WHILE_HIGH / LOCK_UNTIL_PULSE / LOCK_UNTIL_RESULT）：
