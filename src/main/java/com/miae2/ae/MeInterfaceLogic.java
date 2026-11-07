@@ -86,14 +86,20 @@ public class MeInterfaceLogic extends InterfaceLogic {
 
     /** 每 tick 兜底：容量被外部重置时补回来（比较是 long，几乎零开销）。 */
     public void miae2$ensureCapacity() {
-        if (getStorage().getCapacity(AEKeyType.items()) != this.tier.itemCapacity()) {
+        if (getStorage().getCapacity(AEKeyType.items()) != this.tier.itemCapacity()
+                || getConfig().getCapacity(AEKeyType.items()) != this.tier.itemCapacity()) {
             this.applyInputCapacity(this.tier);
         }
     }
 
     private void applyInputCapacity(Tier tier) {
+        // **storage 与 config 是两本账**：storage 决定「能存多少」，config 决定「界面里保持量能设多少」。
+        // 只设 storage 时，设置数量对话框仍按 config 的注册表默认值（物品 64 / 流体 1B）限制
+        // ⇒ 超大档永远只能设到 64（2026-11-07 用户实测两次都是这个症状）。
         getStorage().setCapacity(AEKeyType.items(), tier.itemCapacity());
         getStorage().setCapacity(AEKeyType.fluids(), tier.fluidCapacity());
+        getConfig().setCapacity(AEKeyType.items(), tier.itemCapacity());
+        getConfig().setCapacity(AEKeyType.fluids(), tier.fluidCapacity());
     }
 
     public Tier tier() {
