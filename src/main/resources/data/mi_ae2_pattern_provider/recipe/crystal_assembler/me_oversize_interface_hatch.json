@@ -1,0 +1,44 @@
+{
+  "type": "extendedae:crystal_assembler",
+  "neoforge:conditions": [
+    {
+      "type": "neoforge:mod_loaded",
+      "modid": "extendedae"
+    }
+  ],
+  "input_items": [
+    {
+      "ingredient": {
+        "item": "modern_industrialization:me_extended_interface_hatch"
+      }
+    },
+    {
+      "amount": 8,
+      "ingredient": {
+        "item": "ae2:capacity_card"
+      }
+    },
+    {
+      "amount": 2,
+      "ingredient": {
+        "item": "extendedae:concurrent_processor"
+      }
+    },
+    {
+      "amount": 4,
+      "ingredient": {
+        "item": "minecraft:crafting_table"
+      }
+    },
+    {
+      "amount": 8,
+      "ingredient": {
+        "tag": "ae2:glass_cable"
+      }
+    }
+  ],
+  "output": {
+    "count": 1,
+    "id": "modern_industrialization:me_oversize_interface_hatch"
+  }
+}
