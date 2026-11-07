@@ -1,7 +1,7 @@
 {
   "casing": "mi_ae2_pattern_provider:me_interface_hatch",
   "default_overlays": {
-    "side": "mi_ae2_pattern_provider:block/me_hatch_overlay_none"
+    "side": "mi_ae2_pattern_provider:block/me_pattern_provider_hatch_overlay_side"
   },
   "loader": "modern_industrialization:machine"
 }
