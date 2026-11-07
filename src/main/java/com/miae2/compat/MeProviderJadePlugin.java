@@ -85,8 +85,6 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
         registration.registerBlockDataProvider(new NodeData(), MePatternProviderBlockEntity.class);
         commonRegistration = registration;
         registration.registerBlockDataProvider(new NodeData(), MeInterfaceBlockEntity.class);
-        // 流体行有自己的 UID ⇒ 必须也有自己的服务端数据 provider（Jade 按 UID 分发数据）
-        registration.registerBlockDataProvider(new FluidData(), MeInterfaceBlockEntity.class);
         LOGGER.info("[悬浮提示] Jade 插件已注册（服务端数据：网格节点在线状态）");
     }
 
@@ -94,8 +92,6 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
     public void registerClient(IWailaClientRegistration registration) {
         clientRegistration = registration;
         registration.registerBlockComponent(new NodeLine(), MachineBlock.class);
-        // 流体行单独一个 provider：优先级 > MI 的物品 preview，这样顺序是「设备 → 物品 → 流体」
-        registration.registerBlockComponent(new FluidLine(), MachineBlock.class);
         LOGGER.info("[悬浮提示] Jade 插件已注册（客户端行：设备在线 / 设备离线）");
     }
 
@@ -125,97 +121,6 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
             } catch (Throwable ignored) {
                 // 悬浮提示永远不该因为一个状态读取失败而报错
             }
-        }
-    }
-
-    /**
-     * 渲染流体预览：每行「图标 + `1B / 64B`」，用 Jade 的盒子包一圈 —— 就是原版 AE / Jade 标准胶囊样式。
-     *
-     * <p>物品那行不在这里做：MI 自己的物品预览对我们这几个仓是可用 的，重复输出会变成两行。
-     */
-    /** 服务端：把流体摘要写进 **FluidLine 自己的 UID** 那份数据里。 */
-    private static final class FluidData implements IServerDataProvider<BlockAccessor> {
-
-        @Override
-        public ResourceLocation getUid() {
-            return FLUID_UID;
-        }
-
-        @Override
-        public void appendServerData(CompoundTag serverData, BlockAccessor accessor) {
-            try {
-                if (accessor.getBlockEntity() instanceof MeInterfaceBlockEntity be) {
-                    be.miae2$writeContentsPreview(serverData);
-                }
-            } catch (Throwable ignored) {
-                // 悬浮提示永远不该因为本 mod 报错
-            }
-        }
-    }
-
-    /** 流体行：优先级比 MI 的物品预览更「靠后」，保证显示顺序是 设备 → 物品 → 流体。 */
-    private static final class FluidLine implements IBlockComponentProvider {
-
-        @Override
-        public ResourceLocation getUid() {
-            return FLUID_UID;
-        }
-
-        @Override
-        public int getDefaultPriority() {
-            return 2000;
-        }
-
-        @Override
-        public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
-            try {
-                if (!(accessor.getBlockEntity() instanceof MeInterfaceBlockEntity)) {
-                    return;
-                }
-                CompoundTag serverData = accessor.getServerData();
-                if (serverData == null || !serverData.contains("miae2Fluids")) {
-                    return;
-                }
-                appendPreview(tooltip, accessor, serverData);
-            } catch (Throwable ignored) {
-                // 悬浮提示永远不该因为本 mod 报错
-            }
-        }
-    }
-
-    private static void appendPreview(ITooltip tooltip, BlockAccessor accessor, CompoundTag serverData) {
-        ListTag fluids = serverData.getList("miae2Fluids", net.minecraft.nbt.Tag.TAG_STRING);
-        for (int i = 0; i < fluids.size(); i++) {
-            String[] parts = fluids.getString(i).split("\\|");
-            if (parts.length != 3) {
-                continue;
-            }
-            net.minecraft.world.level.material.Fluid fluid =
-                    net.minecraft.core.registries.BuiltInRegistries.FLUID.get(net.minecraft.resources.ResourceLocation.parse(parts[0]));
-            if (fluid == net.minecraft.world.level.material.Fluids.EMPTY) {
-                continue;
-            }
-            long amount;
-            long capacity;
-            try {
-                amount = Long.parseLong(parts[1]);
-                capacity = Long.parseLong(parts[2]);
-            } catch (NumberFormatException e) {
-                continue;
-            }
-            // 纯文字一行：`熔岩 1B`，按住 Shift 才追加 ` / 64B`（2026-11-08 用户定的样式，放弃框和进度条）
-            String label = fluid.getFluidType().getDescription().getString() + " "
-                    + MeInterfaceBlockEntity.miae2$formatFluid(amount);
-            if (accessor.showDetails()) {
-                label += " / " + MeInterfaceBlockEntity.miae2$formatFluid(capacity);
-            }
-            tooltip.add(Component.literal(label).withStyle(ChatFormatting.GRAY));
-        }
-
-        if (serverData.contains("miae2Free")) {
-            tooltip.add(Component.literal(
-                    "空 " + MeInterfaceBlockEntity.miae2$formatFluid(serverData.getLong("miae2Free")))
-                    .withStyle(ChatFormatting.GRAY));
         }
     }
 
