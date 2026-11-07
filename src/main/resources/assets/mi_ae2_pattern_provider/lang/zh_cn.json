@@ -1,5 +1,6 @@
 {
   "block.modern_industrialization.me_pattern_provider_hatch": "ME样板供应仓",
+  "block.modern_industrialization.me_interface_hatch": "ME接口仓",
   "block.modern_industrialization.me_extended_pattern_provider_hatch": "ME扩展样板供应仓",
   "text.mi_ae2_pattern_provider.hatch_name": "ME样板供应仓",
   "text.mi_ae2_pattern_provider.processing_array_suffix": "处理阵列样板供应仓",

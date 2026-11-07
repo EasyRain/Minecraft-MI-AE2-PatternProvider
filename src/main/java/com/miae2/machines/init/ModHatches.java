@@ -9,6 +9,8 @@ import aztech.modern_industrialization.machines.models.MachineCasings;
 import aztech.modern_industrialization.machines.multiblocks.HatchType;
 import aztech.modern_industrialization.machines.multiblocks.HatchTypes;
 import com.miae2.MiAe2PatternProvider;
+import com.miae2.ae.MeInterfaceLogic;
+import com.miae2.machines.blockentities.MeInterfaceBlockEntity;
 import com.miae2.machines.blockentities.MePatternProviderBlockEntity;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.fml.ModList;
@@ -29,6 +31,24 @@ public final class ModHatches {
             ResourceLocation.fromNamespaceAndPath(MiAe2PatternProvider.MOD_ID, "me_extended_pattern_provider"),
             MI.id("me_extended_pattern_provider_hatch")
     );
+
+    /**
+     * ME 接口仓（骨架，2026-11-07）。对标 AE2 的 ME Interface：配置槽按「保持库存」工作，
+     * MI 侧提供索引对应的物品/流体输入视图 + 独立输出缓冲。设计与分档见
+     * {@code docs/2026-11-07-ME接口仓调研/README.md}。
+     */
+    public static final HatchType ME_INTERFACE = HatchTypes.register(
+            ResourceLocation.fromNamespaceAndPath(MiAe2PatternProvider.MOD_ID, "me_interface"),
+            MI.id("me_interface_hatch")
+    );
+
+    // ---- ME 接口仓的槽位（原版档：两进两出，各 9 格 = 1 页 4 排 × 9）----
+    public static final int INTERFACE_ITEM_INPUT_SLOTS = 9;
+    public static final int INTERFACE_ITEM_OUTPUT_SLOTS = 9;
+    public static final int INTERFACE_FLUID_INPUT_SLOTS = 9;
+    public static final int INTERFACE_FLUID_OUTPUT_SLOTS = 9;
+    /** 接口仓流体槽容量：4B = 4000 mB（对齐 AE2 原版接口；超大档为 64B）。 */
+    public static final long INTERFACE_FLUID_CAPACITY = 4_000L;
 
     public static final int ITEM_INPUT_SLOTS = 9;
     /**
@@ -62,6 +82,7 @@ public final class ModHatches {
 
     public static MachineDefinition<MePatternProviderBlockEntity> ME_PATTERN_PROVIDER_BLOCK;
     public static MachineDefinition<MePatternProviderBlockEntity> ME_EXTENDED_PATTERN_PROVIDER_BLOCK;
+    public static MachineDefinition<MeInterfaceBlockEntity> ME_INTERFACE_BLOCK;
 
     private ModHatches() {
     }
@@ -75,6 +96,11 @@ public final class ModHatches {
         MachineCasings.create(
                 ResourceLocation.fromNamespaceAndPath(MiAe2PatternProvider.MOD_ID, "me_extended_pattern_provider_hatch"),
                 "ME Extended Pattern Provider Hatch"
+        );
+        // 接口仓机壳：骨架阶段复用样板仓的贴图（model 指向同一个 texture），后续再出独立贴图
+        MachineCasings.create(
+                ResourceLocation.fromNamespaceAndPath(MiAe2PatternProvider.MOD_ID, "me_interface_hatch"),
+                "ME Interface Hatch"
         );
 
         ME_PATTERN_PROVIDER_BLOCK = MachineRegistrationHelper.registerMachine(
@@ -107,11 +133,37 @@ public final class ModHatches {
                     MachineBlockEntity::registerFluidApi
             );
         }
+
+        // ME 接口仓（原版档 9 槽）：骨架阶段先只注册基础档，扩展/超大后续接上
+        ME_INTERFACE_BLOCK = MachineRegistrationHelper.registerMachine(
+                "ME Interface",
+                "me_interface_hatch",
+                bet -> new MeInterfaceBlockEntity(
+                        bet,
+                        interfaceGuiParams(),
+                        INTERFACE_ITEM_INPUT_SLOTS, INTERFACE_ITEM_OUTPUT_SLOTS,
+                        INTERFACE_FLUID_INPUT_SLOTS, INTERFACE_FLUID_OUTPUT_SLOTS,
+                        INTERFACE_FLUID_CAPACITY,
+                        MeInterfaceLogic.Tier.BASE,
+                        ME_INTERFACE,
+                        () -> ME_INTERFACE_BLOCK.blockDefinition().asItem()
+                ),
+                MachineBlockEntity::registerItemApi,
+                MachineBlockEntity::registerFluidApi
+        );
+    }
+
+    /** 接口仓的 GUI 参数（原版档：4 排 = 192 高，见 {@link MeInterfaceBlockEntity#requiredGuiHeight}）。 */
+    private static MachineGuiParameters interfaceGuiParams() {
+        return new MachineGuiParameters.Builder("me_interface_hatch", true)
+                .backgroundHeight(MeInterfaceBlockEntity.requiredGuiHeight(
+                        INTERFACE_ITEM_INPUT_SLOTS, INTERFACE_ITEM_OUTPUT_SLOTS,
+                        INTERFACE_FLUID_INPUT_SLOTS, INTERFACE_FLUID_OUTPUT_SLOTS))
+                .build();
     }
 
     /**
-     * GUI 参数：高度按槽位行数<b>算出来</b>（{@link MePatternProviderBlockEntity#requiredGuiHeight}）。
-     *
+     * GUI 参数：高度按槽位行数<b>算出来</b>（{@link MePatternProviderBlockEntity#requiredGuiHeight}）。     *
      * <p>以前这里写死 {@code backgroundHeight(190)}，正好只够 1+1+1+1 四行；物品输出加到 4 排（共 7 行 = 246）后
      * 若不同步加高，最下面两行槽位会被玩家背包压住（不会有任何报错，只表现为「格子看不见」）。
      * 高度上限是贴图高度 256（见 {@link #ITEM_OUTPUT_SLOTS}），自检里有断言把关。
