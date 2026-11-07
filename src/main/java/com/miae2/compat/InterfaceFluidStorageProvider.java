@@ -37,8 +37,13 @@ public final class InterfaceFluidStorageProvider
         return UID;
     }
 
+    private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
+
     @Override
     public List<ViewGroup<CompoundTag>> getGroups(Accessor<?> accessor) {
+        // 诊断（临时）：确认这个 provider 到底有没有被 Jade 调用、拿到的 target 是什么
+        LOGGER.info("[Jade 流体] getGroups 被调用 target={}", accessor.getTarget() == null
+                ? "null" : accessor.getTarget().getClass().getName());
         if (!(accessor.getTarget() instanceof MeInterfaceBlockEntity be) || be.miae2$configSlots() <= 9) {
             return List.of();
         }
@@ -65,6 +70,7 @@ public final class InterfaceFluidStorageProvider
         if (free > 0) {
             views.add(FluidView.writeDefault(JadeFluidObject.empty(), free));
         }
+        LOGGER.info("[Jade 流体] 生成 {} 条视图（free={}）", views.size(), free);
         return views.isEmpty() ? List.of() : List.of(new ViewGroup<>(views));
     }
 
