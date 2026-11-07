@@ -2,7 +2,12 @@
 navigation:
   title: "ME Interface Hatch"
   icon: "modern_industrialization:me_interface_hatch"
-  position: 30
+  parent: index.md
+  position: 5
+item_ids:
+  - modern_industrialization:me_interface_hatch
+  - modern_industrialization:me_extended_interface_hatch
+  - modern_industrialization:me_oversize_interface_hatch
 ---
 
 # ME Interface Hatch
