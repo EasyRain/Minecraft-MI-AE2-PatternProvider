@@ -150,7 +150,6 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
      * <p>物品那行不在这里做：MI 自己的物品预览对我们这几个仓是可用 的，重复输出会变成两行。
      */
     private static void appendPreview(ITooltip tooltip, BlockAccessor accessor, CompoundTag serverData) {
-        var helper = snownee.jade.api.ui.IElementHelper.get();
         ListTag fluids = serverData.getList("miae2Fluids", net.minecraft.nbt.Tag.TAG_STRING);
         for (int i = 0; i < fluids.size(); i++) {
             String[] parts = fluids.getString(i).split("\\|");
@@ -170,30 +169,19 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
             } catch (NumberFormatException e) {
                 continue;
             }
-            // 原版 AE / Jade 标准样式：一条**进度条**（比例 = 当前量 / 每格容量），右侧跟文字；
-            // 容量只在**按住 Shift**（Jade 的 showDetails）时才显示，平时只显示当前量。
-            String name = fluid.getFluidType().getDescription().getString();
-            String label = accessor.showDetails()
-                    ? name + " " + MeInterfaceBlockEntity.miae2$formatFluid(amount) + " / "
-                            + MeInterfaceBlockEntity.miae2$formatFluid(capacity)
-                    : name + " " + MeInterfaceBlockEntity.miae2$formatFluid(amount);
-            float ratio = capacity > 0 ? (float) Math.min(1.0, (double) amount / (double) capacity) : 0.0F;
-            // 进度条要「填的是流体材质」：用 ProgressStyle.overlay 把流体元素盖上去；
-            // 文字用浅灰（AE 那种），默认样式是深色，会像黑字贴在条上。
-            var style = helper.progressStyle()
-                    .overlay(helper.fluid(snownee.jade.api.fluid.JadeFluidObject.of(fluid, amount)))
-                    .textColor(0xFFAAAAAA)
-                    .fitContentX(false);
-            tooltip.add(helper.progress(ratio, Component.literal(label), style,
-                    snownee.jade.api.ui.BoxStyle.getNestedBox(), false));
+            // 纯文字一行：`熔岩 1B`，按住 Shift 才追加 ` / 64B`（2026-11-08 用户定的样式，放弃框和进度条）
+            String label = fluid.getFluidType().getDescription().getString() + " "
+                    + MeInterfaceBlockEntity.miae2$formatFluid(amount);
+            if (accessor.showDetails()) {
+                label += " / " + MeInterfaceBlockEntity.miae2$formatFluid(capacity);
+            }
+            tooltip.add(Component.literal(label).withStyle(ChatFormatting.GRAY));
         }
 
         if (serverData.contains("miae2Free")) {
-            // 「空」那一行在 AE 里也是**带框**的，所以这里同样包一个盒子（只有文字）
-            var empty = new snownee.jade.impl.Tooltip();
-            empty.add(Component.literal("空 " + MeInterfaceBlockEntity.miae2$formatFluid(serverData.getLong("miae2Free")))
+            tooltip.add(Component.literal(
+                    "空 " + MeInterfaceBlockEntity.miae2$formatFluid(serverData.getLong("miae2Free")))
                     .withStyle(ChatFormatting.GRAY));
-            tooltip.add(helper.box(empty, snownee.jade.api.ui.BoxStyle.getNestedBox()));
         }
     }
 
