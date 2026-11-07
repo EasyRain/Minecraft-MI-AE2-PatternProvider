@@ -756,50 +756,69 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
      * <p>只在槽里真的有东西时才列，最多各 8 条 —— 比一屏「空 4B」可读得多。
      */
     public void miae2$appendContentsPreview(net.minecraft.nbt.ListTag items, net.minecraft.nbt.ListTag fluids) {
-        int itemLimit = 8;
+        // 物品：逐条列非空（含输入/输出），最多 8 条
+        int itemLines = 0;
+        int itemUsed = 0;
         for (ConfigurableItemStack stack : this.itemInputs) {
-            if (itemLimit <= 0) {
-                break;
+            if (stack.isEmpty()) {
+                continue;
             }
-            if (!stack.isEmpty()) {
+            itemUsed++;
+            if (itemLines < 8) {
                 items.add(net.minecraft.nbt.StringTag.valueOf(
                         "物品：" + stack.getVariant().toStack().getHoverName().getString() + " ×" + stack.getAmount()));
-                itemLimit--;
+                itemLines++;
             }
         }
         for (ConfigurableItemStack stack : this.itemOutputs) {
-            if (itemLimit <= 0) {
-                break;
+            if (stack.isEmpty()) {
+                continue;
             }
-            if (!stack.isEmpty()) {
+            itemUsed++;
+            if (itemLines < 8) {
                 items.add(net.minecraft.nbt.StringTag.valueOf(
                         "产物：" + stack.getVariant().toStack().getHoverName().getString() + " ×" + stack.getAmount()));
-                itemLimit--;
+                itemLines++;
             }
         }
-        int fluidLimit = 8;
+        // 恒定一行概况：让「全空」时也能看出槽位规模
+        items.add(net.minecraft.nbt.StringTag.valueOf(
+                "物品槽：已用 " + itemUsed + " / " + (this.itemInputs.size() + this.itemOutputs.size())));
+
+        // 流体：逐条列非空，最多 8 条；并恒定给一行概况（用户要的「流体预览」）
+        int fluidLines = 0;
+        int fluidUsed = 0;
+        long fluidTotal = 0L;
         for (ConfigurableFluidStack stack : this.fluidInputs) {
-            if (fluidLimit <= 0) {
-                break;
+            if (stack.isEmpty()) {
+                continue;
             }
-            if (!stack.isEmpty()) {
+            fluidUsed++;
+            fluidTotal += stack.getAmount();
+            if (fluidLines < 8) {
                 fluids.add(net.minecraft.nbt.StringTag.valueOf(
                         "流体：" + stack.getVariant().getFluid().getFluidType().getDescription().getString()
                                 + " " + stack.getAmount() + " mB"));
-                fluidLimit--;
+                fluidLines++;
             }
         }
         for (ConfigurableFluidStack stack : this.fluidOutputs) {
-            if (fluidLimit <= 0) {
-                break;
+            if (stack.isEmpty()) {
+                continue;
             }
-            if (!stack.isEmpty()) {
+            fluidUsed++;
+            fluidTotal += stack.getAmount();
+            if (fluidLines < 8) {
                 fluids.add(net.minecraft.nbt.StringTag.valueOf(
                         "产物流体：" + stack.getVariant().getFluid().getFluidType().getDescription().getString()
                                 + " " + stack.getAmount() + " mB"));
-                fluidLimit--;
+                fluidLines++;
             }
         }
+        long perSlot = this.fluidInputs.isEmpty() ? 0L : this.fluidInputs.get(0).getCapacity();
+        fluids.add(net.minecraft.nbt.StringTag.valueOf(
+                "流体槽：已用 " + fluidUsed + " / " + (this.fluidInputs.size() + this.fluidOutputs.size())
+                        + "（每格 " + perSlot + " mB，共 " + fluidTotal + " mB）"));
     }
 
     /** 网格节点是否在线（供 Jade / TOP 显示「设备在线 / 设备离线」，与样板仓一致）。 */
