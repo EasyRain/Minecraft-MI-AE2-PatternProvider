@@ -15,8 +15,7 @@
     "OverdriveSlotGateMixin",
     "ProcessingArrayParallelMixin",
     "MultiProcessingArrayParallelMixin",
-    "SlotPositionAccessor",
-    "MenuOpenerProbeMixin"
+    "SlotPositionAccessor"
   ],
   "client": [
     "AEBaseScreenMixin"
