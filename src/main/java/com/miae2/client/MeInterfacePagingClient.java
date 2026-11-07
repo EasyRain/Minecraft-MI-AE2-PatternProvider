@@ -147,22 +147,25 @@ public final class MeInterfacePagingClient {
                 setPos(fluidSlots.get(i), HIDDEN, HIDDEN);
             }
 
-            // 页 0/1 = 物品，页 2/3 = 流体；每页两组（输入 + 输出），组内偏移 0 或 18
-            int half = (this.page % 2) * 18;
-            List<Slot> inGroup = this.page < 2 ? itemSlots.subList(0, GROUP) : fluidSlots.subList(0, GROUP);
-            List<Slot> outGroup = this.page < 2 ? itemSlots.subList(GROUP, GROUP * 2)
-                    : fluidSlots.subList(GROUP, GROUP * 2);
-
-            place(inGroup, half, 0);   // 输入：第 0、1 行
-            place(outGroup, half, 2);  // 输出：第 2、3 行
+            // 4 页分工（每页 4 排 = 36 格，输入整组在前、输出整组在后）：
+            //   页 0 = 物品入 0–35    页 1 = 流体入 0–35
+            //   页 2 = 物品出 0–35    页 3 = 流体出 0–35
+            // 这样每页的「长相」完全不同（物品 / 水滴 / 产物），一眼就能看出翻了页；
+            // 输出单独放在后两页，配置与取产物互不干扰。
+            switch (this.page) {
+                case 0 -> place(itemSlots.subList(0, GROUP), 0);
+                case 1 -> place(fluidSlots.subList(0, GROUP), 0);
+                case 2 -> place(itemSlots.subList(GROUP, GROUP * 2), 0);
+                default -> place(fluidSlots.subList(GROUP, GROUP * 2), 0);
+            }
         }
 
-        /** 把某组里从 {@code offset} 起的 18 个槽摆到 {@code startRow} 起的 2 行。 */
-        private void place(List<Slot> group, int offset, int startRow) {
-            for (int n = 0; n < 18 && offset + n < group.size(); n++) {
+        /** 把一整组 36 个槽摆成 4 排 × 9。 */
+        private void place(List<Slot> group, int startRow) {
+            for (int n = 0; n < group.size() && n < COLS * ROWS_VISIBLE; n++) {
                 int row = startRow + n / COLS;
                 int col = n % COLS;
-                setPos(group.get(offset + n), FIRST_COL_X + col * ROW_HEIGHT, FIRST_ROW_Y + row * ROW_HEIGHT);
+                setPos(group.get(n), FIRST_COL_X + col * ROW_HEIGHT, FIRST_ROW_Y + row * ROW_HEIGHT);
             }
         }
 
