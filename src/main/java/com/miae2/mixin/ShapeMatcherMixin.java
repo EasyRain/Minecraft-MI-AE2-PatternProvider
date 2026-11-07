@@ -60,10 +60,29 @@ public abstract class ShapeMatcherMixin {
         }
         List<BlockPos> energyHatches = List.copyOf(energyInputs);
 
+        // 同一阵列里的样板供应仓位置（多仓单活仲裁用）：每个仓拿到「其它仓」的列表
+        List<BlockPos> providerPositions = new ArrayList<>();
+        for (HatchBlockEntity hatch : matched) {
+            if (hatch instanceof MePatternProviderBlockEntity) {
+                providerPositions.add(hatch.getBlockPos());
+            }
+        }
+
         for (HatchBlockEntity hatch : matched) {
             if (hatch instanceof IControllerPosHolder holder) {
                 holder.miae2$setControllerPos(this.controllerPos);
                 holder.miae2$setEnergyInputHatchPositions(energyHatches);
+
+                List<BlockPos> siblings;
+                if (hatch instanceof MePatternProviderBlockEntity) {
+                    // 供应仓：只关心「别的供应仓」（多仓单活仲裁）
+                    siblings = new ArrayList<>(providerPositions);
+                    siblings.remove(hatch.getBlockPos());
+                } else {
+                    // 其它仓（如接口仓）：关心阵列里**所有**供应仓 —— 任一方有订单就要让位
+                    siblings = providerPositions;
+                }
+                holder.miae2$setProviderSiblingPositions(List.copyOf(siblings));
 
                 // AppliedFlux 的感应卡会把「能量送不进去」的边记为 blocked，只有该位置的能力失效回调
                 // 才会解除。阵列成形/改动的这一刻主动戳一遍相邻方块，避免它一直卡在 blocked 而永不再试。
@@ -86,6 +105,16 @@ public abstract class ShapeMatcherMixin {
      * <p>置 false 后 MI 的 {@code MultiblockMachineBlockEntity#link()} 不会把 shapeValid 置真；随后
      * {@code onRematch} 走的是"匹配失败"分支（不 rebuild 库存、状态停在 NOT_MATCHED），各仓也已 unlink。
      */
+    /**
+     * 同一个多方块里现在<b>允许多个</b>本 mod 的样板供应仓（多仓单活仲裁，2026-11-07）。
+     *
+     * <p>以前是「多于一个就判结构无效」，理由是：阵列产物会写进聚合库存里任意可接纳的输出格，
+     * 而每个仓的锁定/回收/`LOCK_UNTIL_RESULT` 都是按仓独立的 ⇒ 产物落到别的仓会让发料仓永远等不到
+     * 自己的产物而卡死。<b>现在由 {@code MePatternProviderBlockEntity} 的仲裁解决</b>：
+     * 非活动仓把输出空间锁 0（产物无处可去，只能进活动仓），并拒绝接单，所以归属重新确定。
+     *
+     * <p>这里只做<b>告警</b>（提示玩家已启用多仓），不再改动 {@code matchSuccessful}。
+     */
     private void miae2$enforceSingleProvider() {
         if (!this.matchSuccessful) {
             return;
@@ -100,9 +129,7 @@ public abstract class ShapeMatcherMixin {
         if (providers <= 1) {
             return;
         }
-        LOGGER.warn("该多方块里有 {} 个 ME 样板供应仓（控制器 {}）：同一个阵列只允许一个，已把结构判为无效",
+        LOGGER.info("该多方块里有 {} 个 ME 样板供应仓（控制器 {}）：已启用多仓单活仲裁 —— 同一时刻只有一仓接单，其余锁输出并拒绝新订单",
                 providers, this.controllerPos);
-        this.matchSuccessful = false;
-        this.unlinkHatches();
     }
 }

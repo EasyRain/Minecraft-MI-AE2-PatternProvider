@@ -20,9 +20,11 @@ import aztech.modern_industrialization.machines.gui.MachineGuiParameters;
 import aztech.modern_industrialization.machines.multiblocks.HatchBlockEntity;
 import aztech.modern_industrialization.machines.multiblocks.HatchType;
 import com.miae2.ae.MeInterfaceLogic;
+import com.miae2.util.IControllerPosHolder;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.Nameable;
@@ -50,7 +52,7 @@ import org.jetbrains.annotations.Nullable;
  */
 public class MeInterfaceBlockEntity extends HatchBlockEntity
         implements IInWorldGridNodeHost, IGridNodeListener<MeInterfaceBlockEntity>, InterfaceLogicHost,
-        IActionHost, Nameable {
+        IActionHost, Nameable, IControllerPosHolder {
 
     /** 槽位区几何，与样板仓保持一致（第一行 y、行距、底部余量）。 */
     public static final int SLOT_FIRST_ROW_Y = 20;
@@ -68,6 +70,17 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
 
     private final HatchType hatchType;
     private final Supplier<Item> iconSupplier;
+
+    /**
+     * 同一阵列里所有 ME 样板供应仓的位置（由 {@code ShapeMatcherMixin} 在成形时写入）。
+     *
+     * <p>接口仓的让位规则：**任一样板仓有订单在飞** ⇒ 屏蔽自己的输入（多方块读不到、抽不走），
+     * 否则阵列会拿接口缓存顶替订单材料。详见设计文档 §4.5「多仓共存的让位规则」。
+     */
+    private List<BlockPos> providerPositions = List.of();
+
+    /** 多方块控制器位置（成形时由 ShapeMatcherMixin 写入；接口仓暂时只记录）。 */
+    private BlockPos controllerPos;
 
     public MeInterfaceBlockEntity(
             BEP bep,
@@ -227,6 +240,40 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
     @Override
     public void saveChanges() {
         this.setChanged();
+    }
+
+    @Override
+    public void miae2$setProviderSiblingPositions(List<BlockPos> positions) {
+        this.providerPositions = List.copyOf(positions);
+    }
+
+    @Override
+    public void miae2$setControllerPos(BlockPos pos) {
+        this.controllerPos = pos;
+    }
+
+    @Override
+    public void miae2$setEnergyInputHatchPositions(List<BlockPos> positions) {
+        // 接口仓不参与感应卡的能量定向（那是样板仓/阵列的事），忽略
+    }
+
+    /**
+     * 同阵列里的样板仓是否有订单在飞 —— 接口仓据此让位（屏蔽输入 / 锁输出）。
+     *
+     * <p>TODO ⓪：等索引映射视图实现后，把本方法接到「输入视图报 0 + 拒绝抽取」上；
+     * 输出缓冲的锁也走同一判定（订单进行中不在本仓接产物）。
+     */
+    public boolean miae2$providerOrderActive() {
+        if (this.level == null || this.providerPositions.isEmpty()) {
+            return false;
+        }
+        for (BlockPos pos : this.providerPositions) {
+            if (this.level.getBlockEntity(pos) instanceof MePatternProviderBlockEntity provider
+                    && provider.miae2$hasActiveOrder()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override

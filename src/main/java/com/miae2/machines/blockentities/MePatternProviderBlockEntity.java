@@ -139,6 +139,15 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
     // 阵列内「能源输入仓」的位置，由 ShapeMatcherMixin 在成形时写入；供感应卡定向供电
     private List<BlockPos> energyInputHatchPositions = List.of();
 
+    /**
+     * 同一阵列里<b>其它</b> ME 样板供应仓的位置（由 {@code ShapeMatcherMixin} 在成形时写入）。
+     *
+     * <p>用于「多仓单活」仲裁：同一时刻只允许一个仓接单，其余仓锁输出 + 拒绝 pushPattern，
+     * 这样阵列的产物只会落进活动仓 —— 否则每个仓的 returnInv / LOCK_UNTIL_RESULT 是按仓独立的，
+     * 产物落到别的仓会让发料仓永远等不到自己的产物而卡死。
+     */
+    private List<BlockPos> providerSiblingPositions = List.of();
+
     public MePatternProviderBlockEntity(
             BEP bep,
             MachineGuiParameters guiParams,
@@ -628,6 +637,35 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
     @Override
     public void miae2$setEnergyInputHatchPositions(List<BlockPos> positions) {
         this.energyInputHatchPositions = positions;
+    }
+
+    @Override
+    public void miae2$setProviderSiblingPositions(List<BlockPos> positions) {
+        this.providerSiblingPositions = List.copyOf(positions);
+    }
+
+    /** 本仓当前是否有订单在进行（供同阵列的其它仓判断要不要让位）。 */
+    public boolean miae2$hasActiveOrder() {
+        return this.activePattern != null || this.miae2$isAnyPatternRequested();
+    }
+
+    /**
+     * 同阵列里是否**别的**供应仓正在做订单 —— 有的话本仓必须让位。
+     *
+     * <p>判据只看「对方有没有订单在飞」，不看 CPU 忙不忙：CPU 是**全网**的，
+     * 用它会让不同阵列互相让位。
+     */
+    public boolean miae2$anotherProviderActive() {
+        if (this.level == null || this.providerSiblingPositions.isEmpty()) {
+            return false;
+        }
+        for (BlockPos pos : this.providerSiblingPositions) {
+            if (this.level.getBlockEntity(pos) instanceof MePatternProviderBlockEntity other
+                    && other.miae2$hasActiveOrder()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 阵列内能源输入仓的位置（可能为空：阵列未成形 / 没放能源仓）。供感应卡重定向使用。 */
@@ -1247,6 +1285,15 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         }
         // 网格上还有 CPU 在跑任务（哪怕当前没有产物在途）→ 任务一定还没结束，绝不能回收/解锁。
         if (this.miae2$isAnyCpuBusy()) {
+            this.idleTicks = 0;
+            return;
+        }
+        // 多仓单活仲裁：同阵列里有别的供应仓正在做订单 ⇒ 本仓让位。
+        // 做法与接口仓同一套：把输出空间锁 0（产物无处可去，只能进活动仓），并且不再接新订单
+        // （接单拦截在 MePatternProviderLogic#pushPattern）。不清料、不回收，等对方做完自然恢复。
+        if (this.activePattern == null && this.miae2$anotherProviderActive()) {
+            this.lockAllEmpty(this.itemOutputs);
+            this.lockAllEmpty(this.fluidOutputs);
             this.idleTicks = 0;
             return;
         }
