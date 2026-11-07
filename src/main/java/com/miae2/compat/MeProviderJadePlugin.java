@@ -88,7 +88,7 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
             if (clientRegistration != null) {
                 clientRegistration.registerFluidStorageClient(new InterfaceFluidStorageProvider());
             }
-            LOGGER.info("[悬浮提示] 流体存储 provider 已延迟补注册（覆盖 MI 的同类型注册）");
+            LOGGER.info("[JadeFluid] late register done");
         } catch (Throwable t) {
             LOGGER.warn("[悬浮提示] 流体存储 provider 延迟注册失败", t);
         }
@@ -183,7 +183,7 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
             var style = helper.progressStyle()
                     .overlay(helper.fluid(snownee.jade.api.fluid.JadeFluidObject.of(fluid, amount)))
                     .textColor(0xFFAAAAAA)
-                    .fitContentX(true);
+                    .fitContentX(false);
             tooltip.add(helper.progress(ratio, Component.literal(label), style,
                     snownee.jade.api.ui.BoxStyle.getNestedBox(), false));
         }
