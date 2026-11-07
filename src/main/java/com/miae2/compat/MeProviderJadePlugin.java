@@ -80,34 +80,11 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
     private static IWailaCommonRegistration commonRegistration;
     private static IWailaClientRegistration clientRegistration;
 
-    /**
-     * 在 `FMLLoadCompleteEvent` 里再注册一次流体存储 provider。
-     *
-     * <p>原因：Jade 的存储 provider 表是「一个类 → 一个 provider」，MI 给 `MachineBlockEntity`
-     * 也注册了，谁的注册晚谁生效。我们在插件 `register()` 里那次会被 MI 覆盖掉
-     * （实测 `getGroups` 一次都没被调用），所以必须等所有 mod 加载完再补一次。
-     */
-    public static void reRegisterFluidStorageLate() {
-        try {
-            if (commonRegistration != null) {
-                commonRegistration.registerFluidStorage(new InterfaceFluidStorageProvider(),
-                        MeInterfaceBlockEntity.class);
-            }
-            if (clientRegistration != null) {
-                clientRegistration.registerFluidStorageClient(new InterfaceFluidStorageProvider());
-            }
-            LOGGER.info("[JadeFluid] late register done");
-        } catch (Throwable t) {
-            LOGGER.warn("[悬浮提示] 流体存储 provider 延迟注册失败", t);
-        }
-    }
-
     @Override
     public void register(IWailaCommonRegistration registration) {
         registration.registerBlockDataProvider(new NodeData(), MePatternProviderBlockEntity.class);
         commonRegistration = registration;
         registration.registerBlockDataProvider(new NodeData(), MeInterfaceBlockEntity.class);
-        registration.registerFluidStorage(new InterfaceFluidStorageProvider(), MeInterfaceBlockEntity.class);
         LOGGER.info("[悬浮提示] Jade 插件已注册（服务端数据：网格节点在线状态）");
     }
 
@@ -117,7 +94,6 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
         registration.registerBlockComponent(new NodeLine(), MachineBlock.class);
         // 流体行单独一个 provider：优先级 > MI 的物品 preview，这样顺序是「设备 → 物品 → 流体」
         registration.registerBlockComponent(new FluidLine(), MachineBlock.class);
-        registration.registerFluidStorageClient(new InterfaceFluidStorageProvider());
         LOGGER.info("[悬浮提示] Jade 插件已注册（客户端行：设备在线 / 设备离线）");
     }
 
@@ -142,10 +118,9 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
                 }
                 serverData.putBoolean(TAG_ONLINE, online);
 
-                // 兜底：只有「标准流体存储 provider 没有被 Jade 调用」时才自己渲染流体行，
-                // 否则会和标准管道输出重复（2026-11-07 反复踩过的坑）。
-                if (!InterfaceFluidStorageProvider.wasCalled()
-                        && accessor.getBlockEntity() instanceof MeInterfaceBlockEntity be) {
+                // 流体行**永远**由我们写（确定性最重要：之前的「有标准管道就不写」开关会抖动，
+                // 因为那个 provider 时而被调用时而不被调用）。
+                if (accessor.getBlockEntity() instanceof MeInterfaceBlockEntity be) {
                     be.miae2$writeContentsPreview(serverData);
                 }
             } catch (Throwable ignored) {
