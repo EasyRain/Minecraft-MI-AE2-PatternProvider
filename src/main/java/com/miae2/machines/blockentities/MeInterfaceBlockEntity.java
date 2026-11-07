@@ -34,6 +34,7 @@ import aztech.modern_industrialization.machines.multiblocks.HatchBlockEntity;
 import aztech.modern_industrialization.machines.multiblocks.HatchType;
 import com.miae2.ae.MeInterfaceLogic;
 import com.miae2.util.IControllerPosHolder;
+import com.miae2.util.IUnboundedItemAccessor;
 import com.mojang.logging.LogUtils;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerPlayer;
@@ -154,7 +155,12 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
 
         // 输入槽：普通输入槽（容量由 AE 侧 config/storage 决定，MI 侧只做视图 —— TODO ②）
         for (int i = 0; i < itemInSlots; i++) {
-            this.itemInputs.add(ConfigurableItemStack.standardInputSlot());
+            ConfigurableItemStack slot = ConfigurableItemStack.standardInputSlot();
+            // 输入槽只是镜像容器：其容量必须**不低于** AE 侧每槽容量，否则大容量档位会被 MI 侧卡在 64
+            // （用户实测：超大档 AE 侧能填 1024，MI 侧却显示 64）。输入不参与阵列并行推算，所以给无上限是安全的。
+            // 流体侧不需要这招：流体槽容量本来就是构造参数（4B/64B）。
+            ((IUnboundedItemAccessor) slot).miae2$setUnbounded(true);
+            this.itemInputs.add(slot);
         }
         // 输出槽：物品<b>普通容量 64</b>，绝不能无上限（阵列按输出空间反推并行，虚报会销毁产物）
         for (int i = 0; i < itemOutSlots; i++) {
