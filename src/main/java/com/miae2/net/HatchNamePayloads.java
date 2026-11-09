@@ -46,4 +46,24 @@ public final class HatchNamePayloads {
             return TYPE;
         }
     }
+
+    /**
+     * 服务端 → 客户端：把刚生效的名字同步给客户端的方块实体。
+     *
+     * <p>必需：Jade / TOP 的行是**客户端**读方块实体拼出来的，而 MI 的 `sync()` / 更新包
+     * 不保证把自定义名带到客户端（2026-11-09 实测：服务端已写入、悬浮提示仍是旧名）。
+     */
+    public record NameSync(BlockPos pos, String name) implements CustomPacketPayload {
+        public static final Type<NameSync> TYPE =
+                new Type<>(ResourceLocation.fromNamespaceAndPath(MiAe2PatternProvider.MOD_ID, "sync_hatch_name"));
+        public static final StreamCodec<ByteBuf, NameSync> CODEC = StreamCodec.composite(
+                BlockPos.STREAM_CODEC, NameSync::pos,
+                ByteBufCodecs.STRING_UTF8, NameSync::name,
+                NameSync::new);
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
 }
