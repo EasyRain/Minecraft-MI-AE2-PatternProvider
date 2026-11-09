@@ -749,7 +749,11 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
     public void miae2$setCustomName(Component name) {
         this.customName = name;
         this.setChanged();
-        this.sync();
+        // ⚠️ `onPlaced` 在**客户端**也会跑（放置预测），MI 的 sync() 在逻辑客户端会直接抛
+        // `IllegalStateException: Cannot call sync() on the logical client!`（2026-11-09 实机崩溃）。
+        if (this.level != null && !this.level.isClientSide()) {
+            this.sync();
+        }
     }
 
     @Override
