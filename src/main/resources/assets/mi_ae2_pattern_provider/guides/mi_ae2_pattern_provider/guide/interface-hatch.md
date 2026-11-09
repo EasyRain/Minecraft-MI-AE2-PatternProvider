@@ -60,10 +60,6 @@ Same as AE2's interface: **crafting card ×1, fuzzy card ×1**. In addition, eve
 interface by addons is grafted automatically (for example ExtendedAE-Plus' channel card). The virtual crafting card
 belongs to pattern providers and is not accepted.
 
-> The hatch's AE node records **who placed it** (written on placement, restored after a reload). Anything that relies
-> on node ownership — ExtendedAE-Plus' channel card, for example — therefore works **without binding the card to a
-> player by hand**.
-
 ## Tooltips
 
 With Jade / The One Probe the hatch shows **Device Online / Device Offline**; 36-slot tiers additionally list their
