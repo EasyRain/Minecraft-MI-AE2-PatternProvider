@@ -71,17 +71,17 @@ public final class HatchRenameScreen extends Screen {
                 this.left + FIELD_X, this.top + FIELD_Y, FIELD_W, FIELD_H, Component.empty());
         this.field.setMaxLength(64);
         this.field.setBordered(false);              // 底图上已经画了边框
-        this.field.setTextColor(0x3F3F3F);          // 浅色面板上用深色字
+        this.field.setTextColor(0x000000);          // 浅色面板上用黑字（对比度才够）
         this.field.setHint(Component.translatable("gui.mi_ae2_pattern_provider.rename_hint"));
         this.addRenderableWidget(this.field);
         this.setInitialFocus(this.field);
 
         int totalW = BUTTON_W * 2 + 8;
         int x = this.left + (IMAGE_W - totalW) / 2;
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> submit())
-                .bounds(x, this.top + BUTTON_Y, BUTTON_W, BUTTON_H).build());
-        this.addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> onClose())
-                .bounds(x + BUTTON_W + 8, this.top + BUTTON_Y, BUTTON_W, BUTTON_H).build());
+        this.addRenderableWidget(new AEButton(x, this.top + BUTTON_Y, BUTTON_W, BUTTON_H,
+                Component.translatable("gui.done"), b -> submit()));
+        this.addRenderableWidget(new AEButton(x + BUTTON_W + 8, this.top + BUTTON_Y, BUTTON_W, BUTTON_H,
+                Component.translatable("gui.cancel"), b -> onClose()));
     }
 
     private void submit() {
@@ -104,11 +104,11 @@ public final class HatchRenameScreen extends Screen {
         graphics.fill(0, 0, this.width, this.height, 0x80000000);
         graphics.blit(TEXTURE, this.left, this.top, 0, 0, IMAGE_W, IMAGE_H);
         // 标题：AE 对话框习惯放在左上角（内缩 8）
-        graphics.drawString(this.font, this.title, this.left + 8, this.top + 8, 0x3F3F3F, false);
+        graphics.drawString(this.font, this.title, this.left + 8, this.top + 8, 0x000000, false);
         if (this.field != null && this.field.getValue().isEmpty()) {
             graphics.drawString(this.font,
                     Component.translatable("gui.mi_ae2_pattern_provider.rename_hint"),
-                    this.left + FIELD_X + 1, this.top + FIELD_Y + 2, 0x9A9A9A, false);
+                    this.left + FIELD_X + 1, this.top + FIELD_Y + 2, 0x707070, false);
         }
         super.render(graphics, mouseX, mouseY, partialTick);
     }
@@ -116,5 +116,27 @@ public final class HatchRenameScreen extends Screen {
     @Override
     public boolean isPauseScreen() {
         return false;
+    }
+
+    /** 暗色扁平按钮（AE 终端那种观感）：实填充 + 1px 描边，悬停变亮。 */
+    private static final class AEButton extends Button {
+
+        AEButton(int x, int y, int w, int h, Component message, OnPress onPress) {
+            super(x, y, w, h, message, onPress, DEFAULT_NARRATION);
+        }
+
+        @Override
+        protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+            boolean hovered = this.isHovered();
+            int border = hovered ? 0xFFE0E0E0 : 0xFF8B8B8B;
+            int fill = hovered ? 0xFF3C3C3C : 0xFF2A2A2A;
+            graphics.fill(this.getX(), this.getY(),
+                    this.getX() + this.width, this.getY() + this.height, border);
+            graphics.fill(this.getX() + 1, this.getY() + 1,
+                    this.getX() + this.width - 1, this.getY() + this.height - 1, fill);
+            graphics.drawCenteredString(net.minecraft.client.Minecraft.getInstance().font,
+                    this.getMessage(), this.getX() + this.width / 2,
+                    this.getY() + (this.height - 8) / 2, 0xFFE0E0E0);
+        }
     }
 }
