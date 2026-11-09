@@ -764,7 +764,9 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
     public PatternContainerGroup getTerminalGroup() {
         // 终端里保留带宿主名的完整命名：「电力高炉样板供应仓」「轧线机处理阵列样板供应仓」，
         // 见 computeAutoName()。
-        return new PatternContainerGroup(this.getTerminalIcon(), this.computeAutoName(), List.of());
+        // 玩家改过名就用自定义名（AE 的语义：自定义名就是这个名字），否则用自动名。
+        Component terminalName = this.getCustomName() != null ? this.getCustomName() : this.computeAutoName();
+        return new PatternContainerGroup(this.getTerminalIcon(), terminalName, List.of());
     }
 
     @Override
