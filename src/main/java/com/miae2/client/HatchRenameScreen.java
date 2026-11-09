@@ -114,7 +114,8 @@ public final class HatchRenameScreen extends Screen {
         int y = this.top;
 
         // 底图（面板描边 + 底色 + 输入框框都由它提供）
-        graphics.blit(TEXTURE, x, y, 0, 0, PANEL_W, PANEL_H);
+        // ⚠️ 必须给贴图尺寸：7 参重载按 256×256 图集算 UV，176×96 的图会被缩放错位。
+        graphics.blit(TEXTURE, x, y, 0, 0, PANEL_W, PANEL_H, PANEL_W, PANEL_H);
 
         // 标题（不加阴影：像素汉字加阴影容易糊在一起，AE 原版也没有）
         graphics.drawString(this.font, this.title, x + 8, y + 8, 0x000000, false);
