@@ -15,15 +15,27 @@ import net.neoforged.neoforge.network.PacketDistributor;
 /**
  * 仓的重命名界面（纯客户端 Screen，不占菜单）。
  *
- * <p>AE2 的切割刀在本版本只能重命名**物品**（名称压印模板那套），没有「重命名已放置方块」的路径；
- * 所以这里自己补一个：切割刀右键我们的仓 → 服务端发 {@link HatchNamePayloads.OpenEditor} → 本界面。
- * 提交时空串表示清除自定义名。
+ * <p>视觉上模仿 AE2 的原生对话框：深色面板 + 一圈浅色描边 + 居中标题 + 输入框 + 两个按钮。
+ * 不复用 AE2 的 `QuartzKnifeMenu`/`ScreenStyle` 的原因（2026-11-09）：那条路的写入点最终落到
+ * `AEBaseBlockEntity#setCustomName`，我们是 MI 的方块实体，投不过去；而复用它的界面要给 AE 的
+ * `AETextField` 准备一份 `ScreenStyle` 资源，等于把界面绑死在 AE2 内部实现上。
  */
 @OnlyIn(Dist.CLIENT)
 public final class HatchRenameScreen extends Screen {
 
+    // AE2 对话框配色
+    private static final int PANEL_BG = 0xE61A1A1A;
+    private static final int PANEL_BORDER = 0xFF6E6E6E;
+    private static final int PANEL_INNER = 0xFF2B2B2B;
+    private static final int TEXT_COLOR = 0xFFE0E0E0;
+
+    private static final int PANEL_W = 240;
+    private static final int PANEL_H = 116;
+
     private final BlockPos pos;
     private EditBox field;
+    private int panelX;
+    private int panelY;
 
     private HatchRenameScreen(BlockPos pos) {
         super(Component.translatable("gui.mi_ae2_pattern_provider.rename_title"));
@@ -37,19 +49,22 @@ public final class HatchRenameScreen extends Screen {
 
     @Override
     protected void init() {
-        int cx = this.width / 2;
-        int cy = this.height / 2;
-        this.field = new EditBox(this.font, cx - 100, cy - 20, 200, 20,
+        this.panelX = (this.width - PANEL_W) / 2;
+        this.panelY = (this.height - PANEL_H) / 2;
+
+        this.field = new EditBox(this.font,
+                this.panelX + 20, this.panelY + 44, PANEL_W - 40, 20,
                 Component.translatable("gui.mi_ae2_pattern_provider.rename_hint"));
         this.field.setMaxLength(64);
         this.field.setHint(Component.translatable("gui.mi_ae2_pattern_provider.rename_hint"));
         this.addRenderableWidget(this.field);
         this.setInitialFocus(this.field);
 
+        int buttonY = this.panelY + PANEL_H - 34;
         this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> submit())
-                .bounds(cx - 100, cy + 10, 98, 20).build());
+                .bounds(this.panelX + 20, buttonY, 96, 20).build());
         this.addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> onClose())
-                .bounds(cx + 2, cy + 10, 98, 20).build());
+                .bounds(this.panelX + PANEL_W - 116, buttonY, 96, 20).build());
     }
 
     private void submit() {
@@ -69,8 +84,19 @@ public final class HatchRenameScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(graphics, mouseX, mouseY, partialTick);
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, this.height / 2 - 44, 0xFFFFFF);
+        // 半透明遮罩 + AE 风格面板
+        graphics.fill(0, 0, this.width, this.height, 0x80000000);
+        int x = this.panelX;
+        int y = this.panelY;
+        graphics.fill(x - 1, y - 1, x + PANEL_W + 1, y + PANEL_H + 1, PANEL_BORDER);
+        graphics.fill(x, y, x + PANEL_W, y + PANEL_H, PANEL_BG);
+        graphics.fill(x + 1, y + 1, x + PANEL_W - 1, y + 2, PANEL_INNER);
+
+        graphics.drawCenteredString(this.font, this.title, this.width / 2, y + 12, TEXT_COLOR);
+        graphics.drawCenteredString(this.font,
+                Component.translatable("gui.mi_ae2_pattern_provider.rename_hint"),
+                this.width / 2, y + 28, 0xFF9A9A9A);
+
         super.render(graphics, mouseX, mouseY, partialTick);
     }
 
