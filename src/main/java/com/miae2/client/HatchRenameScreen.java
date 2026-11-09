@@ -1,51 +1,54 @@
 package com.miae2.client;
 
+import appeng.client.gui.widgets.AE2Button;
 import com.miae2.net.HatchNamePayloads;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * 仓的重命名界面：底图用我们自己画的 AE 风格面板（{@code textures/gui/hatch_rename.png}）。
+ * 仓的重命名界面：一个**紧凑**的 AE 风格对话框（没有背包区）。
  *
- * <p>底图尺寸 **176×186**，输入框已经画在图上（内区 x 19–157、y 45–58），标题与两个按钮由代码补：
+ * <p>做法与 AE 一致（2026-11-09 用户指出）：AE 的对话框不是一整张图，而是
+ * 「`background.png` 那种 1px 描边 + 纯色底拉伸成小框」+ 输入框 + 文字 + 按钮。
+ * 这里就用 AE 的实测配色直接画：
  * <ul>
- *   <li>标题：左上内缩 8px（AE 对话框的习惯）；</li>
- *   <li>输入框：正好盖住底图那格；</li>
- *   <li>按钮：底图里输入框与背包格之间那段空白（y 62–100）放「完成 / 取消」，各 50×20。</li>
+ *   <li>面板：描边 {@code (65,63,84)}、底 {@code (203,204,212)}；</li>
+ *   <li>输入框：描边 {@code (105,109,136)}、内里 {@code (154,159,180)}、底边压深 {@code (77,77,103)}；</li>
+ *   <li>按钮：直接用 AE 自己的 {@link AE2Button}（它会按 AE 样式表取贴图）。</li>
  * </ul>
  *
- * <p>为什么不用 AE2 的 {@code QuartzKnifeMenu}：它的服务端 action 只把名字存进 `currentName`，
- * 真正的方块改名落点是 `AEBaseBlockEntity#setCustomName`，我们是 MI 的方块实体，投不过去。
+ * <p><b>不要高斯虚化</b>：见 {@link #renderBackground} 的空覆写。
  */
 @OnlyIn(Dist.CLIENT)
 public final class HatchRenameScreen extends Screen {
 
-    private static final ResourceLocation TEXTURE =
-            ResourceLocation.fromNamespaceAndPath(com.miae2.MiAe2PatternProvider.MOD_ID, "textures/gui/hatch_rename.png");
+    // AE2 实测配色
+    private static final int OVERLAY = 0x80000000;
+    private static final int PANEL_BG = 0xFFCBCED4;
+    private static final int PANEL_EDGE = 0xFF413F54;
+    private static final int FIELD_EDGE = 0xFF696D88;
+    private static final int FIELD_BG = 0xFF9A9FB4;
+    private static final int FIELD_EDGE_BOTTOM = 0xFF4D4D67;
 
-    /** 底图尺寸（与 hatch_rename.png 的可视面板一致）。 */
-    private static final int IMAGE_W = 176;
-    private static final int IMAGE_H = 186;
+    /** 小框尺寸：标题 + 输入框 + 一排按钮，就这些。 */
+    private static final int PANEL_W = 176;
+    private static final int PANEL_H = 96;
 
-    /** 底图上输入框的内区（1px 边界留给描边）。 */
-    private static final int FIELD_X = 20;
-    private static final int FIELD_Y = 45;
-    private static final int FIELD_W = 137;
-    private static final int FIELD_H = 13;
+    private static final int FIELD_X = 12;
+    private static final int FIELD_Y = 30;
+    private static final int FIELD_W = 152;
+    private static final int FIELD_H = 16;
 
-    /** 按钮：放在输入框与背包格之间的空白里。 */
-    private static final int BUTTON_Y = 70;
     private static final int BUTTON_W = 50;
     private static final int BUTTON_H = 20;
+    private static final int BUTTON_Y = 58;
 
     private final BlockPos pos;
     private EditBox field;
@@ -64,27 +67,22 @@ public final class HatchRenameScreen extends Screen {
 
     @Override
     protected void init() {
-        this.left = (this.width - IMAGE_W) / 2;
-        this.top = (this.height - IMAGE_H) / 2;
+        this.left = (this.width - PANEL_W) / 2;
+        this.top = (this.height - PANEL_H) / 2;
 
         this.field = new EditBox(this.font,
-                this.left + FIELD_X, this.top + FIELD_Y, FIELD_W, FIELD_H, Component.empty());
+                this.left + FIELD_X + 3, this.top + FIELD_Y + 4, FIELD_W - 6, 10, Component.empty());
         this.field.setMaxLength(64);
-        this.field.setBordered(false);              // 底图上已经画了边框
-        this.field.setTextColor(0x000000);          // 浅色面板上用黑字（对比度才够）
+        this.field.setBordered(false);       // 边框用 render() 里画的那圈
+        this.field.setTextColor(0xFFFFFF);   // AE 的输入框里是白字
         this.field.setHint(Component.translatable("gui.mi_ae2_pattern_provider.rename_hint"));
         this.addRenderableWidget(this.field);
         this.setInitialFocus(this.field);
 
-        int totalW = BUTTON_W * 2 + 8;
-        int x = this.left + (IMAGE_W - totalW) / 2;
-        // 直接复用 AE 自己的按钮类：它按 AE 的样式表取贴图（浅灰面板 + 深色 1px 描边），
-        // 和我们自绘的“暗色扁平”不是一回事（2026-11-09 用户指出）。
-        this.addRenderableWidget(new appeng.client.gui.widgets.AE2Button(
-                x, this.top + BUTTON_Y, BUTTON_W, BUTTON_H,
+        int x = this.left + (PANEL_W - (BUTTON_W * 2 + 8)) / 2;
+        this.addRenderableWidget(new AE2Button(x, this.top + BUTTON_Y, BUTTON_W, BUTTON_H,
                 Component.translatable("gui.done"), b -> submit()));
-        this.addRenderableWidget(new appeng.client.gui.widgets.AE2Button(
-                x + BUTTON_W + 8, this.top + BUTTON_Y, BUTTON_W, BUTTON_H,
+        this.addRenderableWidget(new AE2Button(x + BUTTON_W + 8, this.top + BUTTON_Y, BUTTON_W, BUTTON_H,
                 Component.translatable("gui.cancel"), b -> onClose()));
     }
 
@@ -105,24 +103,39 @@ public final class HatchRenameScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        graphics.fill(0, 0, this.width, this.height, 0x80000000);
-        graphics.blit(TEXTURE, this.left, this.top, 0, 0, IMAGE_W, IMAGE_H);
-        // 标题：AE 对话框习惯放在左上角（内缩 8）
-        graphics.drawString(this.font, this.title, this.left + 8, this.top + 8, 0x000000, true);
+        graphics.fill(0, 0, this.width, this.height, OVERLAY);
+
+        int x = this.left;
+        int y = this.top;
+
+        // 面板：1px 描边 + 纯色底（等价于 AE 把 background.png 拉伸成小框）
+        graphics.fill(x, y, x + PANEL_W, y + PANEL_H, PANEL_EDGE);
+        graphics.fill(x + 1, y + 1, x + PANEL_W - 1, y + PANEL_H - 1, PANEL_BG);
+
+        // 输入框：AE 的 text_field 就是「外描边 + 内里 + 底边压深」
+        int fx = x + FIELD_X;
+        int fy = y + FIELD_Y;
+        graphics.fill(fx, fy, fx + FIELD_W, fy + FIELD_H, FIELD_EDGE);
+        graphics.fill(fx + 1, fy + 1, fx + FIELD_W - 1, fy + FIELD_H - 1, FIELD_BG);
+        graphics.fill(fx + 1, fy + FIELD_H - 2, fx + FIELD_W - 1, fy + FIELD_H - 1, FIELD_EDGE_BOTTOM);
+
+        // 标题
+        graphics.drawString(this.font, this.title, x + 8, y + 8, 0x000000, true);
+
+        super.render(graphics, mouseX, mouseY, partialTick);
+
+        // 空输入时把提示画在框里（白字太亮，用半透明灰）
         if (this.field != null && this.field.getValue().isEmpty()) {
             graphics.drawString(this.font,
                     Component.translatable("gui.mi_ae2_pattern_provider.rename_hint"),
-                    this.left + FIELD_X + 1, this.top + FIELD_Y + 2, 0x707070, true);
+                    fx + 4, fy + 4, 0xB0B4C4, false);
         }
-        super.render(graphics, mouseX, mouseY, partialTick);
     }
 
     /**
      * **必须空覆写**：1.21.1 的 `Screen#render()` 会自动调 4 参 `renderBackground(...)`，
-     * 它内部走 `renderBlurredBackground()` → 高斯虚化**整个帧缓冲**。
-     * 我们的面板是在 `render()` 里先画的，紧接着 `super.render()` 触发这次虚化 ⇒ 背景糊成一片、
-     * 而 widget（按钮/输入框）在虚化之后才画所以是清晰的（2026-11-09 实机症状，
-     * 与 Hojojutsu 的 Fix #31 是同一个根因）。暗色遮罩我们自己画。
+     * 内部走 `renderBlurredBackground()` → 高斯虚化整个帧缓冲。我们的面板先画、`super.render()`
+     * 后触发虚化 ⇒ 背景糊、按钮清晰（2026-11-09 实机症状，与 Hojojutsu Fix #31 同因）。
      */
     @Override
     public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
@@ -133,5 +146,4 @@ public final class HatchRenameScreen extends Screen {
     public boolean isPauseScreen() {
         return false;
     }
-
 }
