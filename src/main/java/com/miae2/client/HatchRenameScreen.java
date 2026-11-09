@@ -117,6 +117,18 @@ public final class HatchRenameScreen extends Screen {
         super.render(graphics, mouseX, mouseY, partialTick);
     }
 
+    /**
+     * **必须空覆写**：1.21.1 的 `Screen#render()` 会自动调 4 参 `renderBackground(...)`，
+     * 它内部走 `renderBlurredBackground()` → 高斯虚化**整个帧缓冲**。
+     * 我们的面板是在 `render()` 里先画的，紧接着 `super.render()` 触发这次虚化 ⇒ 背景糊成一片、
+     * 而 widget（按钮/输入框）在虚化之后才画所以是清晰的（2026-11-09 实机症状，
+     * 与 Hojojutsu 的 Fix #31 是同一个根因）。暗色遮罩我们自己画。
+     */
+    @Override
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // 故意留空：不要高斯虚化
+    }
+
     @Override
     public boolean isPauseScreen() {
         return false;
