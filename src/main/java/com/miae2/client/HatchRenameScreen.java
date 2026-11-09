@@ -78,9 +78,13 @@ public final class HatchRenameScreen extends Screen {
 
         int totalW = BUTTON_W * 2 + 8;
         int x = this.left + (IMAGE_W - totalW) / 2;
-        this.addRenderableWidget(new AEButton(x, this.top + BUTTON_Y, BUTTON_W, BUTTON_H,
+        // 直接复用 AE 自己的按钮类：它按 AE 的样式表取贴图（浅灰面板 + 深色 1px 描边），
+        // 和我们自绘的“暗色扁平”不是一回事（2026-11-09 用户指出）。
+        this.addRenderableWidget(new appeng.client.gui.widgets.AE2Button(
+                x, this.top + BUTTON_Y, BUTTON_W, BUTTON_H,
                 Component.translatable("gui.done"), b -> submit()));
-        this.addRenderableWidget(new AEButton(x + BUTTON_W + 8, this.top + BUTTON_Y, BUTTON_W, BUTTON_H,
+        this.addRenderableWidget(new appeng.client.gui.widgets.AE2Button(
+                x + BUTTON_W + 8, this.top + BUTTON_Y, BUTTON_W, BUTTON_H,
                 Component.translatable("gui.cancel"), b -> onClose()));
     }
 
@@ -104,11 +108,11 @@ public final class HatchRenameScreen extends Screen {
         graphics.fill(0, 0, this.width, this.height, 0x80000000);
         graphics.blit(TEXTURE, this.left, this.top, 0, 0, IMAGE_W, IMAGE_H);
         // 标题：AE 对话框习惯放在左上角（内缩 8）
-        graphics.drawString(this.font, this.title, this.left + 8, this.top + 8, 0x000000, false);
+        graphics.drawString(this.font, this.title, this.left + 8, this.top + 8, 0x000000, true);
         if (this.field != null && this.field.getValue().isEmpty()) {
             graphics.drawString(this.font,
                     Component.translatable("gui.mi_ae2_pattern_provider.rename_hint"),
-                    this.left + FIELD_X + 1, this.top + FIELD_Y + 2, 0x707070, false);
+                    this.left + FIELD_X + 1, this.top + FIELD_Y + 2, 0x707070, true);
         }
         super.render(graphics, mouseX, mouseY, partialTick);
     }
@@ -118,25 +122,4 @@ public final class HatchRenameScreen extends Screen {
         return false;
     }
 
-    /** 暗色扁平按钮（AE 终端那种观感）：实填充 + 1px 描边，悬停变亮。 */
-    private static final class AEButton extends Button {
-
-        AEButton(int x, int y, int w, int h, Component message, OnPress onPress) {
-            super(x, y, w, h, message, onPress, DEFAULT_NARRATION);
-        }
-
-        @Override
-        protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-            boolean hovered = this.isHovered();
-            int border = hovered ? 0xFFE0E0E0 : 0xFF8B8B8B;
-            int fill = hovered ? 0xFF3C3C3C : 0xFF2A2A2A;
-            graphics.fill(this.getX(), this.getY(),
-                    this.getX() + this.width, this.getY() + this.height, border);
-            graphics.fill(this.getX() + 1, this.getY() + 1,
-                    this.getX() + this.width - 1, this.getY() + this.height - 1, fill);
-            graphics.drawCenteredString(net.minecraft.client.Minecraft.getInstance().font,
-                    this.getMessage(), this.getX() + this.width / 2,
-                    this.getY() + (this.height - 8) / 2, 0xFFE0E0E0);
-        }
-    }
 }
