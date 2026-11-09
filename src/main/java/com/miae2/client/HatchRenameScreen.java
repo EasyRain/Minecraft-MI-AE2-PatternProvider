@@ -29,7 +29,12 @@ import net.neoforged.neoforge.network.PacketDistributor;
 @OnlyIn(Dist.CLIENT)
 public final class HatchRenameScreen extends Screen {
 
-    // AE2 实测配色
+    /** 我们自己的对话框底图（176×96，用户手改）。 */
+    private static final net.minecraft.resources.ResourceLocation TEXTURE =
+            net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(
+                    com.miae2.MiAe2PatternProvider.MOD_ID, "textures/gui/rename_dialog_bg.png");
+
+    // AE2 实测配色（仅作参考，实际由底图提供）
     private static final int OVERLAY = 0x80000000;
     private static final int PANEL_BG = 0xFFCBCED4;
     private static final int PANEL_EDGE = 0xFF413F54;
@@ -108,23 +113,17 @@ public final class HatchRenameScreen extends Screen {
         int x = this.left;
         int y = this.top;
 
-        // 面板：1px 描边 + 纯色底（等价于 AE 把 background.png 拉伸成小框）
-        graphics.fill(x, y, x + PANEL_W, y + PANEL_H, PANEL_EDGE);
-        graphics.fill(x + 1, y + 1, x + PANEL_W - 1, y + PANEL_H - 1, PANEL_BG);
+        // 底图（面板描边 + 底色 + 输入框框都由它提供）
+        graphics.blit(TEXTURE, x, y, 0, 0, PANEL_W, PANEL_H);
 
-        // 输入框：AE 的 text_field 就是「外描边 + 内里 + 底边压深」
-        int fx = x + FIELD_X;
-        int fy = y + FIELD_Y;
-        graphics.fill(fx, fy, fx + FIELD_W, fy + FIELD_H, FIELD_EDGE);
-        graphics.fill(fx + 1, fy + 1, fx + FIELD_W - 1, fy + FIELD_H - 1, FIELD_BG);
-        graphics.fill(fx + 1, fy + FIELD_H - 2, fx + FIELD_W - 1, fy + FIELD_H - 1, FIELD_EDGE_BOTTOM);
-
-        // 标题
-        graphics.drawString(this.font, this.title, x + 8, y + 8, 0x000000, true);
+        // 标题（不加阴影：像素汉字加阴影容易糊在一起，AE 原版也没有）
+        graphics.drawString(this.font, this.title, x + 8, y + 8, 0x000000, false);
 
         super.render(graphics, mouseX, mouseY, partialTick);
 
         // 空输入时把提示画在框里（白字太亮，用半透明灰）
+        int fx = x + FIELD_X + 1;
+        int fy = y + FIELD_Y + 1;
         if (this.field != null && this.field.getValue().isEmpty()) {
             graphics.drawString(this.font,
                     Component.translatable("gui.mi_ae2_pattern_provider.rename_hint"),
