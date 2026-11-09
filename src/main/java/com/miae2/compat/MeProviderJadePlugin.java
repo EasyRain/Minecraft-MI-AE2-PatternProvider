@@ -76,6 +76,7 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
             ResourceLocation.fromNamespaceAndPath(MiAe2PatternProvider.MOD_ID, "grid_node_interface");
 
     private static final String TAG_ONLINE = "miae2NodeOnline";
+    private static final String TAG_NAME = "miae2NodeName";
     /** 36 槽接口仓的内容预览（物品条目 / 流体条目，各上限若干条）。 */
     private static final String TAG_ITEMS = "miae2Items";
     private static final String TAG_FLUIDS = "miae2Fluids";
@@ -133,6 +134,14 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
                     return;
                 }
                 serverData.putBoolean(TAG_ONLINE, online);
+                // 自定义名也走服务端数据：客户端方块实体不一定能及时拿到（MI 的同步包不保证带它），
+                // 而悬浮提示是客户端拼的，直接由服务端给最稳（2026-11-09 实测）。
+                if (accessor.getBlockEntity() instanceof net.minecraft.world.Nameable nameable) {
+                    var custom = nameable.getCustomName();
+                    if (custom != null && !custom.getString().isBlank()) {
+                        serverData.putString(TAG_NAME, custom.getString());
+                    }
+                }
 
                 // 流体数据由 FluidData（UID = grid_node_fluids）单独发送 ——
                 // Jade 的服务端数据是**按 provider UID 分开同步**的，混在 NodeData 里 FluidLine 收不到。
@@ -193,6 +202,13 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
                 }
                 tooltip.add(Component.translatable(online ? KEY_ONLINE : KEY_OFFLINE)
                         .withStyle(ChatFormatting.GRAY));
+                // 自定义名（服务端提供，不依赖客户端方块实体是否同步到）
+                if (serverData.contains(TAG_NAME)) {
+                    String name = serverData.getString(TAG_NAME);
+                    if (!name.isBlank()) {
+                        tooltip.add(Component.literal("名称: " + name).withStyle(ChatFormatting.GRAY));
+                    }
+                }
             } catch (Throwable ignored) {
                 // 同上：绝不让悬浮提示因为本 mod 报错
             }
