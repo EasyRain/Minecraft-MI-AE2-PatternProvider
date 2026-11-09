@@ -229,6 +229,7 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
                 .setTagName("me_pattern_provider");
         this.logic = new MePatternProviderLogic(this.mainNode, this, this, patternSlots);
         this.registerComponents(new LogicComponent());
+        this.registerComponents(new CustomNameComponent());
     }
 
     // ---------- AE2 网格节点生命周期 ----------
@@ -590,6 +591,10 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
     /** 手持任意扳手右键：打开 MI 原生槽位界面（用于手动取出卡住的物品/流体）。 */
     @Override
     public boolean useWrench(Player player, InteractionHand hand, BlockHitResult hitResult) {
+        // 扳手 + Shift：直接拆下方块（与 AE2 的扳手行为一致，2026-11-09 ATM10 反馈）
+        if (this.miae2$dismantleIfShift(player)) {
+            return true;
+        }
         if (player instanceof ServerPlayer serverPlayer) {
             super.openMenu(serverPlayer);
         }
@@ -630,18 +635,106 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
                 .equals(BuiltInRegistries.ITEM.getKey(stack.getItem()));
     }
 
-    // ---------- Nameable / 自动命名 ----------
 
-    @Override
-    public Component getName() {
-        // 方块本身名称（"ME样板供应仓"），避免 GUI 标题落到 AE2 默认的"样板供应器"。
-        return this.getDisplayName();
+    /** AE2 切割刀：打开 AE 的重命名界面（不要让 MI 的方块交互把它吞掉）。 */
+    private net.minecraft.world.ItemInteractionResult miae2$knifeOrPass(
+            net.minecraft.world.entity.player.Player player,
+            net.minecraft.world.InteractionHand hand,
+            net.minecraft.core.Direction side) {
+        var stack = player.getItemInHand(hand);
+        if (stack.getItem() instanceof appeng.items.tools.quartz.QuartzCuttingKnifeItem
+                && player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
+            var hit = new net.minecraft.world.phys.BlockHitResult(
+                    net.minecraft.world.phys.Vec3.atCenterOf(this.getBlockPos()), side, this.getBlockPos(), false);
+            var context = new net.minecraft.world.item.context.UseOnContext(serverPlayer, hand, hit);
+            appeng.menu.MenuOpener.open(appeng.menu.implementations.QuartzKnifeMenu.TYPE, serverPlayer,
+                    appeng.menu.locator.MenuLocators.forItemUseContext(context));
+            return net.minecraft.world.ItemInteractionResult.SUCCESS;
+        }
+        return null; // 不是切割刀 → 交回调用方
     }
 
     @Override
+    protected net.minecraft.world.ItemInteractionResult useItemOn(net.minecraft.world.entity.player.Player player,
+            net.minecraft.world.InteractionHand hand, net.minecraft.core.Direction side) {
+        var knife = this.miae2$knifeOrPass(player, hand, side);
+        if (knife != null) {
+            return knife;
+        }
+        return super.useItemOn(player, hand, side);
+    }
+
+    /** 扳手 + Shift：直接把方块拆下来（与 AE2 一致）。 */
+    private boolean miae2$dismantleIfShift(net.minecraft.world.entity.player.Player player) {
+        if (!player.isShiftKeyDown()) {
+            return false;
+        }
+        if (!this.level.isClientSide) {
+            var drop = new net.minecraft.world.item.ItemStack(this.getBlockState().getBlock());
+            this.level.removeBlock(this.getBlockPos(), false);
+            net.minecraft.world.level.block.Block.popResource(this.level, this.getBlockPos(), drop);
+        }
+        return true;
+    }
+
+    /** 自定义名的持久化：MI 的 saveAdditional/loadAdditional 是 final，只能走组件。 */
+    private final class CustomNameComponent implements aztech.modern_industrialization.machines.MachineComponent {
+        private static final String KEY = "miae2_custom_name";
+
+        @Override
+        public void writeNbt(net.minecraft.nbt.CompoundTag tag, net.minecraft.core.HolderLookup.Provider registries) {
+            var name = MePatternProviderBlockEntity.this.getCustomName();
+            if (name != null) {
+                tag.putString(KEY, net.minecraft.network.chat.Component.Serializer.toJson(name, registries));
+            }
+        }
+
+        @Override
+        public void readNbt(net.minecraft.nbt.CompoundTag tag, net.minecraft.core.HolderLookup.Provider registries,
+                boolean client) {
+            if (tag.contains(KEY)) {
+                try {
+                    MePatternProviderBlockEntity.this.miae2$setCustomName(
+                            net.minecraft.network.chat.Component.Serializer.fromJson(tag.getString(KEY), registries));
+                } catch (Throwable ignored) {
+                    // 坏名字不影响加载
+                }
+            }
+        }
+    }
+
+    // ---------- Nameable / 自动命名 ----------
+
+    /** 玩家用切割刀设的自定义名（null = 没设过）—— 读档持久化。 */
+    private Component customName;
+
+    @Override
+    public Component getName() {
+        // 有自定义名就用它，否则用默认方块名（「ME样板供应仓」这类），不落到 AE2 的「样板供应器」。
+        return this.customName != null ? this.customName : this.getDisplayName();
+    }
+
+    @Override
+    public boolean hasCustomName() {
+        return this.customName != null;
+    }
+
+    /**
+     * 只在**玩家设过**名字时返回非 null。
+     *
+     * <p>以前的实现恒返回显示名，导致 Jade 显示「自定义名称：ME样板供应仓」、AE 界面标题也走这条
+     * （2026-11-09 ATM10 实机反馈）。`Nameable` 的语义是「自定义名」，没设就该是 null。
+     */
+    @Override
     public Component getCustomName() {
-        // hasCustomName() 因此恒为 true，AE2 的 GUI 标题（getDefaultMenuTitle）会落到这里。
-        return this.getDisplayName();
+        return this.customName;
+    }
+
+    /** 设置/清除自定义名（切割刀重命名界面用）。 */
+    public void miae2$setCustomName(Component name) {
+        this.customName = name;
+        this.setChanged();
+        this.sync();
     }
 
     @Override

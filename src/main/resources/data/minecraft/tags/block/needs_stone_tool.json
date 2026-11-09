@@ -9,6 +9,25 @@
           "modid": "extendedae"
         }
       ]
+    },
+    "modern_industrialization:me_interface_hatch",
+    {
+      "id": "modern_industrialization:me_extended_interface_hatch",
+      "neoforge:conditions": [
+        {
+          "type": "neoforge:mod_loaded",
+          "modid": "extendedae"
+        }
+      ]
+    },
+    {
+      "id": "modern_industrialization:me_oversize_interface_hatch",
+      "neoforge:conditions": [
+        {
+          "type": "neoforge:mod_loaded",
+          "modid": "extendedae"
+        }
+      ]
     }
   ]
 }
