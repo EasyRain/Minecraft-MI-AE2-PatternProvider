@@ -59,6 +59,8 @@ public final class MeHatchIgtooltipProvider implements TooltipProvider {
     }
 
     private static Component readName(net.minecraft.world.level.block.entity.BlockEntity be, TooltipContext ctx) {
+        // ⚠️ AE 的 NameProviderAdapter 在认领不到方块实体时会传 **null** 进来（2026-11-09 实机 NPE），
+        // 这里必须判空并返回 null（= 不覆盖默认名），否则 Jade 会显示红色「发生错误」。
         CompoundTag data = ctx.serverData();
         if (data != null && data.contains(KEY_NAME)) {
             String name = data.getString(KEY_NAME);
@@ -66,7 +68,6 @@ public final class MeHatchIgtooltipProvider implements TooltipProvider {
                 return Component.literal(name);
             }
         }
-        // 没设名字：回落到方块默认名（交给原版逻辑时会显示默认名，这里显式给）
-        return be.getBlockState().getBlock().getName();
+        return be == null ? null : be.getBlockState().getBlock().getName();
     }
 }
