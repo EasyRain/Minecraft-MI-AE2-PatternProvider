@@ -202,13 +202,6 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
                 }
                 tooltip.add(Component.translatable(online ? KEY_ONLINE : KEY_OFFLINE)
                         .withStyle(ChatFormatting.GRAY));
-                // 自定义名（服务端提供，不依赖客户端方块实体是否同步到）
-                if (serverData.contains(TAG_NAME)) {
-                    String name = serverData.getString(TAG_NAME);
-                    if (!name.isBlank()) {
-                        tooltip.add(Component.literal("名称: " + name).withStyle(ChatFormatting.GRAY));
-                    }
-                }
             } catch (Throwable ignored) {
                 // 同上：绝不让悬浮提示因为本 mod 报错
             }

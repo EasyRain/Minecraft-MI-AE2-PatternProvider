@@ -470,6 +470,11 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         if (entity instanceof Player player) {
             this.mainNode.setOwningPlayer(player);
         }
+        // 继承物品的自定义名（AE 的行为：改名后挖下来再放回去，名字还在）
+        var itemName = stack.get(net.minecraft.core.component.DataComponents.CUSTOM_NAME);
+        if (itemName != null && !itemName.getString().isBlank()) {
+            this.miae2$setCustomName(itemName);
+        }
     }
 
     @Override
