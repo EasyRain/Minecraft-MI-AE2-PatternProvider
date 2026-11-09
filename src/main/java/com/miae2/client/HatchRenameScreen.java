@@ -8,34 +8,49 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.api.distmarker.OnlyIn;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * 仓的重命名界面（纯客户端 Screen，不占菜单）。
+ * 仓的重命名界面：底图用我们自己画的 AE 风格面板（{@code textures/gui/hatch_rename.png}）。
  *
- * <p>视觉上模仿 AE2 的原生对话框：深色面板 + 一圈浅色描边 + 居中标题 + 输入框 + 两个按钮。
- * 不复用 AE2 的 `QuartzKnifeMenu`/`ScreenStyle` 的原因（2026-11-09）：那条路的写入点最终落到
- * `AEBaseBlockEntity#setCustomName`，我们是 MI 的方块实体，投不过去；而复用它的界面要给 AE 的
- * `AETextField` 准备一份 `ScreenStyle` 资源，等于把界面绑死在 AE2 内部实现上。
+ * <p>底图尺寸 **176×186**，输入框已经画在图上（内区 x 19–157、y 45–58），标题与两个按钮由代码补：
+ * <ul>
+ *   <li>标题：左上内缩 8px（AE 对话框的习惯）；</li>
+ *   <li>输入框：正好盖住底图那格；</li>
+ *   <li>按钮：底图里输入框与背包格之间那段空白（y 62–100）放「完成 / 取消」，各 50×20。</li>
+ * </ul>
+ *
+ * <p>为什么不用 AE2 的 {@code QuartzKnifeMenu}：它的服务端 action 只把名字存进 `currentName`，
+ * 真正的方块改名落点是 `AEBaseBlockEntity#setCustomName`，我们是 MI 的方块实体，投不过去。
  */
 @OnlyIn(Dist.CLIENT)
 public final class HatchRenameScreen extends Screen {
 
-    // AE2 对话框配色
-    private static final int PANEL_BG = 0xE61A1A1A;
-    private static final int PANEL_BORDER = 0xFF6E6E6E;
-    private static final int PANEL_INNER = 0xFF2B2B2B;
-    private static final int TEXT_COLOR = 0xFFE0E0E0;
+    private static final ResourceLocation TEXTURE =
+            ResourceLocation.fromNamespaceAndPath(com.miae2.MiAe2PatternProvider.MOD_ID, "textures/gui/hatch_rename.png");
 
-    private static final int PANEL_W = 240;
-    private static final int PANEL_H = 116;
+    /** 底图尺寸（与 hatch_rename.png 的可视面板一致）。 */
+    private static final int IMAGE_W = 176;
+    private static final int IMAGE_H = 186;
+
+    /** 底图上输入框的内区（1px 边界留给描边）。 */
+    private static final int FIELD_X = 20;
+    private static final int FIELD_Y = 45;
+    private static final int FIELD_W = 137;
+    private static final int FIELD_H = 13;
+
+    /** 按钮：放在输入框与背包格之间的空白里。 */
+    private static final int BUTTON_Y = 70;
+    private static final int BUTTON_W = 50;
+    private static final int BUTTON_H = 20;
 
     private final BlockPos pos;
     private EditBox field;
-    private int panelX;
-    private int panelY;
+    private int left;
+    private int top;
 
     private HatchRenameScreen(BlockPos pos) {
         super(Component.translatable("gui.mi_ae2_pattern_provider.rename_title"));
@@ -49,22 +64,24 @@ public final class HatchRenameScreen extends Screen {
 
     @Override
     protected void init() {
-        this.panelX = (this.width - PANEL_W) / 2;
-        this.panelY = (this.height - PANEL_H) / 2;
+        this.left = (this.width - IMAGE_W) / 2;
+        this.top = (this.height - IMAGE_H) / 2;
 
         this.field = new EditBox(this.font,
-                this.panelX + 20, this.panelY + 44, PANEL_W - 40, 20,
-                Component.translatable("gui.mi_ae2_pattern_provider.rename_hint"));
+                this.left + FIELD_X, this.top + FIELD_Y, FIELD_W, FIELD_H, Component.empty());
         this.field.setMaxLength(64);
+        this.field.setBordered(false);              // 底图上已经画了边框
+        this.field.setTextColor(0x3F3F3F);          // 浅色面板上用深色字
         this.field.setHint(Component.translatable("gui.mi_ae2_pattern_provider.rename_hint"));
         this.addRenderableWidget(this.field);
         this.setInitialFocus(this.field);
 
-        int buttonY = this.panelY + PANEL_H - 34;
+        int totalW = BUTTON_W * 2 + 8;
+        int x = this.left + (IMAGE_W - totalW) / 2;
         this.addRenderableWidget(Button.builder(Component.translatable("gui.done"), b -> submit())
-                .bounds(this.panelX + 20, buttonY, 96, 20).build());
+                .bounds(x, this.top + BUTTON_Y, BUTTON_W, BUTTON_H).build());
         this.addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> onClose())
-                .bounds(this.panelX + PANEL_W - 116, buttonY, 96, 20).build());
+                .bounds(x + BUTTON_W + 8, this.top + BUTTON_Y, BUTTON_W, BUTTON_H).build());
     }
 
     private void submit() {
@@ -84,19 +101,15 @@ public final class HatchRenameScreen extends Screen {
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        // 半透明遮罩 + AE 风格面板
         graphics.fill(0, 0, this.width, this.height, 0x80000000);
-        int x = this.panelX;
-        int y = this.panelY;
-        graphics.fill(x - 1, y - 1, x + PANEL_W + 1, y + PANEL_H + 1, PANEL_BORDER);
-        graphics.fill(x, y, x + PANEL_W, y + PANEL_H, PANEL_BG);
-        graphics.fill(x + 1, y + 1, x + PANEL_W - 1, y + 2, PANEL_INNER);
-
-        graphics.drawCenteredString(this.font, this.title, this.width / 2, y + 12, TEXT_COLOR);
-        graphics.drawCenteredString(this.font,
-                Component.translatable("gui.mi_ae2_pattern_provider.rename_hint"),
-                this.width / 2, y + 28, 0xFF9A9A9A);
-
+        graphics.blit(TEXTURE, this.left, this.top, 0, 0, IMAGE_W, IMAGE_H);
+        // 标题：AE 对话框习惯放在左上角（内缩 8）
+        graphics.drawString(this.font, this.title, this.left + 8, this.top + 8, 0x3F3F3F, false);
+        if (this.field != null && this.field.getValue().isEmpty()) {
+            graphics.drawString(this.font,
+                    Component.translatable("gui.mi_ae2_pattern_provider.rename_hint"),
+                    this.left + FIELD_X + 1, this.top + FIELD_Y + 2, 0x9A9A9A, false);
+        }
         super.render(graphics, mouseX, mouseY, partialTick);
     }
 
