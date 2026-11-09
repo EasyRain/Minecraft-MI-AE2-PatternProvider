@@ -64,6 +64,17 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
     private static final ResourceLocation FLUID_UID =
             ResourceLocation.fromNamespaceAndPath(MiAe2PatternProvider.MOD_ID, "grid_node_fluids");
 
+    /**
+     * 接口仓专用的数据/渲染 UID。
+     *
+     * <p>**不能与样板仓共用 `grid_node`**：同一份 `NodeData` 注册给两个方块实体类时，Jade 会报
+     * 「Found different data providers with same id … this may cause issues」，然后只认一个 ——
+     * 表现就是「一类方块有在线状态、另一类没有」（2026-11-09 实测，测试客户端与 ATM10 各缺一边）。
+     * 所以两个类各自一对「服务端 data provider + 客户端行 provider」，UID 唯一。
+     */
+    private static final ResourceLocation INTERFACE_UID =
+            ResourceLocation.fromNamespaceAndPath(MiAe2PatternProvider.MOD_ID, "grid_node_interface");
+
     private static final String TAG_ONLINE = "miae2NodeOnline";
     /** 36 槽接口仓的内容预览（物品条目 / 流体条目，各上限若干条）。 */
     private static final String TAG_ITEMS = "miae2Items";
@@ -82,25 +93,32 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
 
     @Override
     public void register(IWailaCommonRegistration registration) {
-        registration.registerBlockDataProvider(new NodeData(), MePatternProviderBlockEntity.class);
         commonRegistration = registration;
-        registration.registerBlockDataProvider(new NodeData(), MeInterfaceBlockEntity.class);
+        registration.registerBlockDataProvider(new NodeData(UID), MePatternProviderBlockEntity.class);
+        registration.registerBlockDataProvider(new NodeData(INTERFACE_UID), MeInterfaceBlockEntity.class);
         LOGGER.info("[悬浮提示] Jade 插件已注册（服务端数据：网格节点在线状态）");
     }
 
     @Override
     public void registerClient(IWailaClientRegistration registration) {
         clientRegistration = registration;
-        registration.registerBlockComponent(new NodeLine(), MachineBlock.class);
+        registration.registerBlockComponent(new NodeLine(UID, false), MachineBlock.class);
+        registration.registerBlockComponent(new NodeLine(INTERFACE_UID, true), MachineBlock.class);
         LOGGER.info("[悬浮提示] Jade 插件已注册（客户端行：设备在线 / 设备离线）");
     }
 
     /** 服务端：把「网格节点是否在线」写进悬浮数据。 */
     private static final class NodeData implements IServerDataProvider<BlockAccessor> {
 
+        private final ResourceLocation uid;
+
+        NodeData(ResourceLocation uid) {
+            this.uid = uid;
+        }
+
         @Override
         public ResourceLocation getUid() {
-            return UID;
+            return this.uid;
         }
 
         @Override
@@ -127,9 +145,17 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
     /** 客户端：读服务端写下的布尔并显示一行。 */
     private static final class NodeLine implements IBlockComponentProvider {
 
+        private final ResourceLocation uid;
+        private final boolean forInterface;
+
+        NodeLine(ResourceLocation uid, boolean forInterface) {
+            this.uid = uid;
+            this.forInterface = forInterface;
+        }
+
         @Override
         public ResourceLocation getUid() {
-            return UID;
+            return this.uid;
         }
 
         @Override
@@ -141,8 +167,10 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
         public void appendTooltip(ITooltip tooltip, BlockAccessor accessor, IPluginConfig config) {
             try {
                 // MI 所有机器共用 MachineBlock → 这个 provider 会被每一台 MI 机器调用，先认领自己的仓。
-                if (!(accessor.getBlockEntity() instanceof MePatternProviderBlockEntity)
-                        && !(accessor.getBlockEntity() instanceof MeInterfaceBlockEntity)) {
+                boolean matches = this.forInterface
+                        ? accessor.getBlockEntity() instanceof MeInterfaceBlockEntity
+                        : accessor.getBlockEntity() instanceof MePatternProviderBlockEntity;
+                if (!matches) {
                     return;
                 }
                 CompoundTag serverData = accessor.getServerData();
