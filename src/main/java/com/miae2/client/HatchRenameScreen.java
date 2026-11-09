@@ -29,8 +29,6 @@ import net.neoforged.neoforge.network.PacketDistributor;
 @OnlyIn(Dist.CLIENT)
 public final class HatchRenameScreen extends Screen {
 
-    private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
-
     /** 我们自己的对话框底图（176×96，用户手改）。 */
     private static final net.minecraft.resources.ResourceLocation TEXTURE =
             net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(
@@ -95,8 +93,6 @@ public final class HatchRenameScreen extends Screen {
 
     private void submit() {
         String name = this.field == null ? "" : this.field.getValue();
-        LOGGER.info(
-                "[Rename] client submit pos={} name='{}'", this.pos, name);
         PacketDistributor.sendToServer(new HatchNamePayloads.SetName(this.pos, name));
         onClose();
     }

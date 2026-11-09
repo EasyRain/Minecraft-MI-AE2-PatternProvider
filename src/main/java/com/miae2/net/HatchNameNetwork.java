@@ -26,33 +26,12 @@ public final class HatchNameNetwork {
         registrar.playToClient(HatchNamePayloads.OpenEditor.TYPE, HatchNamePayloads.OpenEditor.CODEC,
                 (payload, context) -> context.enqueueWork(
                         () -> com.miae2.client.HatchRenameScreen.open(payload.pos())));
-        // 名字生效后同步给客户端（Jade/TOP 读的是客户端方块实体）
-        registrar.playToClient(HatchNamePayloads.NameSync.TYPE, HatchNamePayloads.NameSync.CODEC,
-                (payload, context) -> context.enqueueWork(() -> applyNameOnClient(payload)));
         // 提交名字：服务端校验距离与方块类型后写入
         registrar.playToServer(HatchNamePayloads.SetName.TYPE, HatchNamePayloads.SetName.CODEC,
                 (payload, context) -> context.enqueueWork(() -> applyName(payload, context.player())));
     }
 
-    /** 客户端：把名字写进本地方块实体（不触发同步，避免客户端反向发包）。 */
-    private static void applyNameOnClient(HatchNamePayloads.NameSync payload) {
-        var level = net.minecraft.client.Minecraft.getInstance().level;
-        if (level == null) {
-            return;
-        }
-        String raw = payload.name();
-        Component name = raw == null || raw.isBlank() ? null : Component.literal(raw.trim());
-        var be = level.getBlockEntity(payload.pos());
-        if (be instanceof MePatternProviderBlockEntity provider) {
-            provider.miae2$setCustomNameLocal(name);
-        } else if (be instanceof MeInterfaceBlockEntity hatch) {
-            hatch.miae2$setCustomNameLocal(name);
-        }
-    }
-
     private static void applyName(HatchNamePayloads.SetName payload, net.minecraft.world.entity.player.Player player) {
-        LOGGER.info(
-                "[Rename] server got SetName pos={} name='{}'", payload.pos(), payload.name());
         if (!(player instanceof ServerPlayer serverPlayer) || serverPlayer.level().isClientSide) {
             return;
         }
@@ -66,20 +45,13 @@ public final class HatchNameNetwork {
         var be = level.getBlockEntity(payload.pos());
         if (be instanceof MePatternProviderBlockEntity provider) {
             provider.miae2$setCustomName(name);
-            net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(serverPlayer,
-                    new HatchNamePayloads.NameSync(payload.pos(), name == null ? "" : payload.name()));
             level.sendBlockUpdated(payload.pos(), be.getBlockState(), be.getBlockState(),
                     net.minecraft.world.level.block.Block.UPDATE_ALL);
         } else if (be instanceof MeInterfaceBlockEntity hatch) {
             hatch.miae2$setCustomName(name);
-            net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(serverPlayer,
-                    new HatchNamePayloads.NameSync(payload.pos(), name == null ? "" : payload.name()));
             level.sendBlockUpdated(payload.pos(), be.getBlockState(), be.getBlockState(),
                     net.minecraft.world.level.block.Block.UPDATE_ALL);
         } else {
-            LOGGER.warn(
-                    "[Rename] no matching block entity at {} (got {})", payload.pos(),
-                    be == null ? "null" : be.getClass().getName());
         }
     }
 }
