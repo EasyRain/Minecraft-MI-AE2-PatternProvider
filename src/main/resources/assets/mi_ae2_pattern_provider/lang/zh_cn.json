@@ -27,5 +27,7 @@
   "block.modern_industrialization.me_extended_interface_hatch": "ME扩展接口仓",
   "block.modern_industrialization.me_oversize_interface_hatch": "ME超大接口仓",
   "gui.mi_ae2_pattern_provider.page_prev": "上一页",
-  "gui.mi_ae2_pattern_provider.page_next": "下一页"
+  "gui.mi_ae2_pattern_provider.page_next": "下一页",
+  "gui.mi_ae2_pattern_provider.rename_title": "重命名这个仓",
+  "gui.mi_ae2_pattern_provider.rename_hint": "留空表示恢复默认名称"
 }

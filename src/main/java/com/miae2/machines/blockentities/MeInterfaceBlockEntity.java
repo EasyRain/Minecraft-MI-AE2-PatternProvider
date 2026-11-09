@@ -922,11 +922,10 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
         var stack = player.getItemInHand(hand);
         if (stack.getItem() instanceof appeng.items.tools.quartz.QuartzCuttingKnifeItem
                 && player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
-            var hit = new net.minecraft.world.phys.BlockHitResult(
-                    net.minecraft.world.phys.Vec3.atCenterOf(this.getBlockPos()), side, this.getBlockPos(), false);
-            var context = new net.minecraft.world.item.context.UseOnContext(serverPlayer, hand, hit);
-            appeng.menu.MenuOpener.open(appeng.menu.implementations.QuartzKnifeMenu.TYPE, serverPlayer,
-                    appeng.menu.locator.MenuLocators.forItemUseContext(context));
+            // AE2 的切割刀只能重命名**物品**（名称压印模板），没有「重命名已放置方块」的路径，
+            // 所以这里打开本 mod 自己的重命名界面（客户端 Screen，不占菜单）。
+            net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(serverPlayer,
+                    new com.miae2.net.HatchNamePayloads.OpenEditor(this.getBlockPos()));
             return net.minecraft.world.ItemInteractionResult.SUCCESS;
         }
         return null; // 不是切割刀 → 交回调用方

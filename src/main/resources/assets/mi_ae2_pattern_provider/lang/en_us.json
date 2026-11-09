@@ -27,5 +27,7 @@
   "block.modern_industrialization.me_extended_interface_hatch": "ME Extended Interface Hatch",
   "block.modern_industrialization.me_oversize_interface_hatch": "ME Oversize Interface Hatch",
   "gui.mi_ae2_pattern_provider.page_prev": "Previous page",
-  "gui.mi_ae2_pattern_provider.page_next": "Next page"
+  "gui.mi_ae2_pattern_provider.page_next": "Next page",
+  "gui.mi_ae2_pattern_provider.rename_title": "Rename this hatch",
+  "gui.mi_ae2_pattern_provider.rename_hint": "Leave empty to restore the default name"
 }
