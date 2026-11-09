@@ -14,6 +14,8 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 @EventBusSubscriber(modid = MiAe2PatternProvider.MOD_ID, bus = EventBusSubscriber.Bus.MOD)
 public final class HatchNameNetwork {
 
+    private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
+
     private HatchNameNetwork() {
     }
 
@@ -30,6 +32,8 @@ public final class HatchNameNetwork {
     }
 
     private static void applyName(HatchNamePayloads.SetName payload, net.minecraft.world.entity.player.Player player) {
+        LOGGER.info(
+                "[Rename] server got SetName pos={} name='{}'", payload.pos(), payload.name());
         if (!(player instanceof ServerPlayer serverPlayer) || serverPlayer.level().isClientSide) {
             return;
         }
@@ -43,8 +47,16 @@ public final class HatchNameNetwork {
         var be = level.getBlockEntity(payload.pos());
         if (be instanceof MePatternProviderBlockEntity provider) {
             provider.miae2$setCustomName(name);
+            level.sendBlockUpdated(payload.pos(), be.getBlockState(), be.getBlockState(),
+                    net.minecraft.world.level.block.Block.UPDATE_ALL);
         } else if (be instanceof MeInterfaceBlockEntity hatch) {
             hatch.miae2$setCustomName(name);
+            level.sendBlockUpdated(payload.pos(), be.getBlockState(), be.getBlockState(),
+                    net.minecraft.world.level.block.Block.UPDATE_ALL);
+        } else {
+            LOGGER.warn(
+                    "[Rename] no matching block entity at {} (got {})", payload.pos(),
+                    be == null ? "null" : be.getClass().getName());
         }
     }
 }
