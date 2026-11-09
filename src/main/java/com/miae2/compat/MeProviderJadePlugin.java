@@ -103,6 +103,47 @@ public final class MeProviderJadePlugin implements IWailaPlugin {
     @Override
     public void registerClient(IWailaClientRegistration registration) {
         clientRegistration = registration;
+        // 名字做成「标题」：Jade 的 tooltip 收集回调里把第一行（方块名）换成自定义名。
+        // 不能走 AE 的 IGT addBlockEntityName —— 它按**方块类**注册，MI 所有机器共用一个 MachineBlock，
+        // 注册上去会连带把别的方块 Cast 到我们的 BE 类（实测 ClassCastException，红字刷屏）。
+        registration.addTooltipCollectedCallback((box, accessor) -> {
+            try {
+                if (!(accessor instanceof BlockAccessor blockAccessor)) {
+                    return;
+                }
+                if (!(blockAccessor.getBlockEntity() instanceof MePatternProviderBlockEntity)
+                        && !(blockAccessor.getBlockEntity() instanceof MeInterfaceBlockEntity)) {
+                    return;
+                }
+                var data = blockAccessor.getServerData();
+                if (data == null) {
+                    return;
+                }
+                String name = data.contains(TAG_NAME) ? data.getString(TAG_NAME) : "";
+                if (name.isBlank()) {
+                    return;
+                }
+                var tooltip = box.getTooltip();
+                int lines = tooltip.size();
+                if (lines <= 0) {
+                    return;
+                }
+                // 第 0 行是 Jade 的方块名：用自定义名替换它，其余行原样搬过去
+                var rest = new java.util.ArrayList<java.util.List<snownee.jade.api.ui.IElement>>(lines);
+                for (int i = 1; i < lines; i++) {
+                    rest.add(tooltip.get(i, snownee.jade.api.ui.IElement.Align.LEFT));
+                }
+                tooltip.clear();
+                tooltip.add(Component.literal(name));
+                for (var line : rest) {
+                    if (line != null && !line.isEmpty()) {
+                        tooltip.add(line);
+                    }
+                }
+            } catch (Throwable ignored) {
+                // 绝不让悬浮提示因本 mod 报错
+            }
+        });
         registration.registerBlockComponent(new NodeLine(UID, false), MachineBlock.class);
         registration.registerBlockComponent(new NodeLine(INTERFACE_UID, true), MachineBlock.class);
         LOGGER.info("[悬浮提示] Jade 插件已注册（客户端行：设备在线 / 设备离线）");
