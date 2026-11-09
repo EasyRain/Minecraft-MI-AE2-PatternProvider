@@ -950,7 +950,13 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
         if (!this.level.isClientSide) {
             var drop = new net.minecraft.world.item.ItemStack(this.getBlockState().getBlock());
             this.level.removeBlock(this.getBlockPos(), false);
-            net.minecraft.world.level.block.Block.popResource(this.level, this.getBlockPos(), drop);
+            // 与原版 AE 一致：优先收进背包，放不下才掉地，并播放拾取音效。
+            if (!player.getInventory().add(drop)) {
+                net.minecraft.world.level.block.Block.popResource(this.level, this.getBlockPos(), drop);
+            }
+            this.level.playSound(null, this.getBlockPos(),
+                    net.minecraft.sounds.SoundEvents.ITEM_PICKUP,
+                    net.minecraft.sounds.SoundSource.BLOCKS, 0.6F, 1.0F);
         }
         return true;
     }
