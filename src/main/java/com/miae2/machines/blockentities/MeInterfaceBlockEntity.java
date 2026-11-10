@@ -1023,6 +1023,11 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
     }
 
     /** 设置/清除自定义名（切割刀重命名界面用）。 */
+    /** 仅客户端：写入本地名字，不触发 sync（客户端调 sync 会抛异常）。 */
+    public void miae2$setCustomNameLocal(Component name) {
+        this.customName = name;
+    }
+
     public void miae2$setCustomName(Component name) {
         this.customName = name;
         this.setChanged();
