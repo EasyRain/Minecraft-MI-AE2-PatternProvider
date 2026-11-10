@@ -78,7 +78,6 @@ batching instead. Rather than silently doing nothing there, the module is reject
 The multiplier lives in `config/mi_ae2_pattern_provider-common.toml`:
 
 ```toml
-[quantum_overclock]
 parallel_multiplier = 4   # range 2-16
 ```
 

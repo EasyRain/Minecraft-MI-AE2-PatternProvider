@@ -52,7 +52,7 @@ navigation:
 ## 量子模块没有带来并行
 
 * 确认它插在**处理阵列控制器**里 —— 只有那里并行才生效。别的机器上量子与高级模块效果完全相同。
-* 检查倍率：`config/mi_ae2_pattern_provider-common.toml` 的 `[quantum_overclock] parallel_multiplier`
+* 检查倍率：`config/mi_ae2_pattern_provider-common.toml` 的 `parallel_multiplier`
   （2~16，默认 4），或者在游戏内配置界面里改（Mods → 本 mod → Config）。启动日志里有该文件的绝对路径。
 * 记住倍率是**天花板**：如果输入料量或输出空间只够 3 批，那配置写得再高也只有 3 批。
 

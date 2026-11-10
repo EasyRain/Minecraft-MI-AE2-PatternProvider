@@ -27,11 +27,8 @@
   "gui.mi_ae2_pattern_provider.rename_title": "Rename this hatch",
   "gui.mi_ae2_pattern_provider.rename_hint": "Leave empty to restore the default name",
   "mi_ae2_pattern_provider.configuration.title": "MI AE2 Pattern Provider",
-  "mi_ae2_pattern_provider.configuration.quantum_overclock": "Quantum Overclock",
   "mi_ae2_pattern_provider.configuration.quantum_overclock.parallel_multiplier": "Parallel multiplier",
   "mi_ae2_pattern_provider.configuration.quantum_overclock.parallel_multiplier.tooltip": "Multiplies the Processing Array's machine count for the parallel batch ceiling (64 machines -> 256 at 4x). The real batch is still clamped by available inputs and free output space, so a higher value can never void products - it just cannot always be reached. Applies to the next recipe calculation, no restart needed.",
-  "mi_ae2_pattern_provider.configuration.section.quantum_overclock": "Quantum Overclock",
   "mi_ae2_pattern_provider.configuration.parallel_multiplier": "Parallel multiplier",
-  "mi_ae2_pattern_provider.configuration.parallel_multiplier.tooltip": "Multiplies the Processing Array's machine count for the parallel batch ceiling (64 machines -> 256 at 4x). The real batch is still clamped by available inputs and free output space, so a higher value can never void products - it just cannot always be reached. Applies to the next recipe calculation, no restart needed.",
-  "neoforge.configuration.uitext.section": "%s"
+  "mi_ae2_pattern_provider.configuration.parallel_multiplier.tooltip": "Multiplies the Processing Array's machine count for the parallel batch ceiling (64 machines -> 256 at 4x). The real batch is still clamped by available inputs and free output space, so a higher value can never void products - it just cannot always be reached. Applies to the next recipe calculation, no restart needed."
 }

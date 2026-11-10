@@ -67,7 +67,6 @@ MI 原版模块的行为**完全不变** —— 本 mod 走的是 MI 官方效�
 倍率在 `config/mi_ae2_pattern_provider-common.toml` 里：
 
 ```toml
-[quantum_overclock]
 parallel_multiplier = 4   # 范围 2-16
 ```
 
