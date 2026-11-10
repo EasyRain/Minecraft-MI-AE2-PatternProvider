@@ -1348,11 +1348,11 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         if (!capacityIsTruthful) {
             return false;
         }
-        // 「发料前先看机器状态」（用户 2026-11-07 口径）：
-        // ① 机器还在做上一次的活（输出格上有机器锁）⇒ 先不发；
-        // ② 上一批产物还没抽干净（输出格非空）⇒ 先不发；
-        // ③ 输入格还压着料（上一批发出去的没被吃完）⇒ 先不发（换样板时尤其危险：两批料混在一起）。
-        if (this.miae2$machineIsBusyOrDirty()) {
+        // 「发料前先看机器状态」——**只在换样板时挡**（用户 2026-11-10 口径修正）：
+        // 同一块样板的大量合成必须**连续发料**（1 出 1 的样板遇到大单会连发很多批），
+        // 等机器「输出抽干 + 输入吃空」再发会让每批都串行，吞吐掉一大截。
+        // 真正危险的是「不同样板的料混进同一台机器」，所以只在 activePattern 变了且机器还脏时拒绝。
+        if (this.activePattern != patternDetails && this.miae2$machineIsBusyOrDirty()) {
             return false;
         }
         if (!this.insertPatternInputs(inputHolder, IActionSource.ofMachine(this))) {
