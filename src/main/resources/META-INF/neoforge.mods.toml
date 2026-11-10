@@ -50,8 +50,6 @@ config="${mod_id}.mixins.json"
     ordering="AFTER"
     side="BOTH"
 
-    side="CLIENT"
-
 # 不兼容：MI-Efficiency-Remover 把「效率」全局硬改成始终满档（直接 mixin MI 的 CrafterComponent
 # 与 tesseract 的 AbstractModularCrafterComponent，并 cancel 掉 increase/decreaseEfficiencyTicks）。
 # 它的 cancel 无法被外部 mixin 撤销，因此没法「运行时柔性失效」，只能声明不兼容。
