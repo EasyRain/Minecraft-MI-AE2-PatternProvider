@@ -43,10 +43,10 @@ public final class MiAe2Config {
     public static final ModConfigSpec SPEC;
 
     static {
-        // 只定义一个值，所以**不建分区**：NeoForge 的配置界面会为每个分区生成一个「进去」的按钮，
-        // 而按钮标签固定套 `neoforge.configuration.uitext.section = "%s..."`（ConfigurationScreen#createSection
-        // 里写死）⇒ 项少的时候直接平铺最干净，界面里就是一行「并行倍率」，没有省略号也不用改全局 lang。
-        BUILDER.comment("量子超频模块：在高级超频模块的基础上，再给处理阵列提供「机器数 × 倍率」的并行批次。");
+        // 分区（两级菜单）：**保持 [quantum_overclock] 这一层**，这样旧配置里的值天然继续可读
+        // （2026-11-10 用户口径：宁愿配置界面按钮带 NeoForge 的「…」，也不破坏已有配置）。
+        BUILDER.comment("量子超频模块：在高级超频模块的基础上，再给处理阵列提供「机器数 × 倍率」的并行批次。")
+                .push("quantum_overclock");
         QUANTUM_PARALLEL_MULTIPLIER = BUILDER
                 .comment("并行倍率（乘在处理阵列的机器数上；机器数上限 64）。",
                         "范围 " + QUANTUM_PARALLEL_MIN + " ~ " + QUANTUM_PARALLEL_MAX + "，默认 " + QUANTUM_PARALLEL_DEFAULT + "（64 台机器 → 256 并行）。",
@@ -54,6 +54,7 @@ public final class MiAe2Config {
                         "所以调高不会丢产物，只会在产物太多的配方上「吃不满」。")
                 .defineInRange("parallel_multiplier", QUANTUM_PARALLEL_DEFAULT,
                         QUANTUM_PARALLEL_MIN, QUANTUM_PARALLEL_MAX);
+        BUILDER.pop();
         SPEC = BUILDER.build();
     }
 

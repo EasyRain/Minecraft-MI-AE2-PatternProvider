@@ -198,7 +198,7 @@
   `@Pseudo` + 字符串 targets 的姊妹 mixin（缺 IO 时静默不生效）。**抬的是天花板，不是算完的结果** ——
   真实并行倍率仍由 tesseract `MultipliedCrafterComponent#calculateMultiplier` 按输入料量与输出格空间二分反推
   ⇒ 装不下时自动降倍率、绝不吞产物（若改成「把结果乘 N」，输入侧会出现「模拟够、真扣不够」）。
-  倍率可在 config 调（`mi_ae2_pattern_provider-common.toml` 的 `parallel_multiplier`，
+  倍率可在 config 调（`mi_ae2_pattern_provider-common.toml` 的 `[quantum_overclock] parallel_multiplier`，
   默认 **4×**、范围 **2–16×**；64 机器 = 256 并行）。上限取 16× 的依据：本仓输出空间
   `36 格 × 64 = 2304` 件，官方配方每批物品产物量 P 的分布为 `≤1 52.6% / ≤2 66.1% / ≤4 77.2% / ≤9 95.1%`，
   而 `倍率 ≤ 36/P`（P=1→36、P=2→18、P=4→9、P=9→4）⇒ 16× 是「单产物理论极限 36×」的一半以下。
@@ -264,7 +264,7 @@
   —— 游戏只在日志里留一行 ERROR，照跑不崩，玩家视角就是「这条配方不存在」。现已改成空格 `"s s" / "qaq" / "s s"`，
   并新增冒烟自检 `assertRecipesLoaded`（见「内部」）钉住这一类问题。
 - **量子模块的并行倍率「找不到哪里能设置」（用户 m04362 报告）**：值一直可配，藏在
-  `config/mi_ae2_pattern_provider-common.toml` 的 `parallel_multiplier`，只是没有任何地方
+  `config/mi_ae2_pattern_provider-common.toml` 的 `[quantum_overclock] parallel_multiplier`，只是没有任何地方
   告诉玩家。现在：启动时打一条 INFO 给出该文件的**绝对路径**（`FMLPaths.CONFIGDIR`），
   并接上 **Cloth Config 的游戏内配置界面**（「Mods 界面 → 本 mod → Config」，见「新增」）。
   物品 Shift tooltip 里那行配置说明按用户要求撤掉了 —— 配置项应该出现在配置界面里，而不是塞在物品说明里。

@@ -57,7 +57,7 @@
   等价关系（宿主标记由两个并行 mixin 顺手贴上 ⇒ 注入点失效时会被立刻拒收，而不是白装一次）。那些机器本来也没有
   「机器数」这一层（单方块走 MI 的 `CrafterComponent`，一次一个配方；EI 大型电炉与 IO 热解炉的
   `getMaxMultiplier()` 是**线圈档位的批处理上限**，不是机器数），本 mod 刻意不碰它们。
-  倍率在 `config/mi_ae2_pattern_provider-common.toml` 的 `parallel_multiplier` 里改
+  倍率在 `config/mi_ae2_pattern_provider-common.toml` 的 `[quantum_overclock] parallel_multiplier` 里改
   （默认 4、范围 2–16；该文件的绝对路径会在启动时以 INFO 打进日志）。
   **游戏内也能直接改（NeoForge 自带的配置界面，不需要额外模组）：Mods 界面 → 本 mod → Config**，
   保存后**立即对下一次配方计算生效、不需要重启游戏**（倍率是每次算并行时现读的，这条有冒烟自检钉住）。

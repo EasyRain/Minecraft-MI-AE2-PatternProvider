@@ -30,5 +30,6 @@
   "mi_ae2_pattern_provider.configuration.quantum_overclock.parallel_multiplier": "并行倍率",
   "mi_ae2_pattern_provider.configuration.quantum_overclock.parallel_multiplier.tooltip": "乘在处理阵列的机器数上，作为并行批次上限（4 倍时 64 台机器 → 256 并行）。实际批次还会被输入量与输出格空间夹紧，所以调高绝不会销毁产物，只是未必能吃到。下一次配方计算即生效，不需要重启。",
   "mi_ae2_pattern_provider.configuration.parallel_multiplier": "并行倍率",
-  "mi_ae2_pattern_provider.configuration.parallel_multiplier.tooltip": "乘在处理阵列的机器数上，作为并行批次上限（4 倍时 64 台机器 → 256 并行）。实际批次还会被输入量与输出格空间夹紧，所以调高绝不会销毁产物，只是未必能吃到。下一次配方计算即生效，不需要重启。"
+  "mi_ae2_pattern_provider.configuration.parallel_multiplier.tooltip": "乘在处理阵列的机器数上，作为并行批次上限（4 倍时 64 台机器 → 256 并行）。实际批次还会被输入量与输出格空间夹紧，所以调高绝不会销毁产物，只是未必能吃到。下一次配方计算即生效，不需要重启。",
+  "mi_ae2_pattern_provider.configuration.quantum_overclock": "量子超频"
 }

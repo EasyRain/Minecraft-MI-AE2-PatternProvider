@@ -30,5 +30,6 @@
   "mi_ae2_pattern_provider.configuration.quantum_overclock.parallel_multiplier": "Parallel multiplier",
   "mi_ae2_pattern_provider.configuration.quantum_overclock.parallel_multiplier.tooltip": "Multiplies the Processing Array's machine count for the parallel batch ceiling (64 machines -> 256 at 4x). The real batch is still clamped by available inputs and free output space, so a higher value can never void products - it just cannot always be reached. Applies to the next recipe calculation, no restart needed.",
   "mi_ae2_pattern_provider.configuration.parallel_multiplier": "Parallel multiplier",
-  "mi_ae2_pattern_provider.configuration.parallel_multiplier.tooltip": "Multiplies the Processing Array's machine count for the parallel batch ceiling (64 machines -> 256 at 4x). The real batch is still clamped by available inputs and free output space, so a higher value can never void products - it just cannot always be reached. Applies to the next recipe calculation, no restart needed."
+  "mi_ae2_pattern_provider.configuration.parallel_multiplier.tooltip": "Multiplies the Processing Array's machine count for the parallel batch ceiling (64 machines -> 256 at 4x). The real batch is still clamped by available inputs and free output space, so a higher value can never void products - it just cannot always be reached. Applies to the next recipe calculation, no restart needed.",
+  "mi_ae2_pattern_provider.configuration.quantum_overclock": "Quantum Overclock"
 }
