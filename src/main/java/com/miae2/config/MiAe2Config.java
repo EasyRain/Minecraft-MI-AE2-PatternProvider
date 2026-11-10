@@ -44,8 +44,12 @@ public final class MiAe2Config {
 
     static {
         BUILDER.comment("量子超频模块：在高级超频模块的基础上，再给处理阵列提供「机器数 × 倍率」的并行批次。")
+                // 显式指定语言键：NeoForge 的配置界面不指定时会用「自动拼接」的键，
+                // 与我们写在 lang 里的不一致 ⇒ 界面直接显示键名（2026-11-10 实机反馈，戒指项目也踩过）。
+                .translation("mi_ae2_pattern_provider.configuration.section.quantum_overclock")
                 .push("quantum_overclock");
         QUANTUM_PARALLEL_MULTIPLIER = BUILDER
+                .translation("mi_ae2_pattern_provider.configuration.quantum_overclock.parallel_multiplier")
                 .comment("并行倍率（乘在处理阵列的机器数上；机器数上限 64）。",
                         "范围 " + QUANTUM_PARALLEL_MIN + " ~ " + QUANTUM_PARALLEL_MAX + "，默认 " + QUANTUM_PARALLEL_DEFAULT + "（64 台机器 → 256 并行）。",
                         "这只是倍率上限：实际并行还会被输入料量与输出格空间二次夹紧，",
