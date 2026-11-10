@@ -13,6 +13,9 @@
 - **阻挡模式的语义与 ExtendedAE-Plus 的「智能阻挡」一致**：开启阻挡时，**同一种样板不再被阻挡**，
   只有「换样板 / 输入表里残留的是别的样板的料」时才挡。
 
+- **不再依赖 Cloth Config**：游戏内配置界面（Mods 界面 → 本 mod → Config）改用 **NeoForge 自带的
+  `ConfigurationScreen`**，少一个可选依赖；配置文件本身（`mi_ae2_pattern_provider-common.toml`）不变。
+
 ### 修复
 
 - **清除名字后 AE 界面标题还显示旧名**：悬浮提示已经恢复默认名，但打开 AE 界面时标题仍是旧名

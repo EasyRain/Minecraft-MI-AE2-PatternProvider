@@ -53,5 +53,4 @@ item_ids:
 | [ExtendedAE](https://modrinth.com/mod/extended-ae) | 可选 —— 只影响扩展供应仓 |
 | [ExtendedAE-Plus](https://github.com/GaLicn/ExtendedAE_Plus) | 可选 —— 提供频道卡、扩容卡 |
 | [AppliedFlux](https://github.com/GlodBlock/AppliedFlux) | 可选 —— 提供感应卡 |
-| [Cloth Config](https://modrinth.com/mod/cloth-config) | 可选 —— 游戏内改并行倍率 |
 | [Jade](https://modrinth.com/mod/jade) / [The One Probe](https://modrinth.com/mod/the-one-probe) | 可选 —— 在供应仓上显示「设备在线 / 设备离线」 |

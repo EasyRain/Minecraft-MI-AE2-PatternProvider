@@ -62,7 +62,7 @@ to "either may take the next one".
 * Make sure it is in a **Processing Array controller** — that is the only place parallel applies. In any other
   machine, quantum and advanced modules behave identically.
 * Check the multiplier: `config/mi_ae2_pattern_provider-common.toml` → `[quantum_overclock] parallel_multiplier`
-  (2–16, default 4), or the in-game config screen with Cloth Config. The startup log prints the file path.
+  (2–16, default 4), or the in-game config screen (Mods → this mod → Config). The startup log prints the file path.
 * Remember the multiplier is a **ceiling**: if the array's inputs or its output space only allow 3 batches, you get
   3 batches no matter what the config says.
 

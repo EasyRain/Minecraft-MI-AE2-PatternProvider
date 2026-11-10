@@ -16,10 +16,6 @@
   "item.mi_ae2_pattern_provider.quantum_overclock_module.desc2": "包含高级超频模块的全部效果，并额外提供 %s 倍于机器数的并行批次（受输入料量与输出格空间限制，装不下时会自动降倍率而不是丢产物）。",
   "item.mi_ae2_pattern_provider.guide": "ME样板供应仓手册",
   "item.mi_ae2_pattern_provider.guide.desc": "右键打开游戏内指南。",
-  "config.mi_ae2_pattern_provider.title": "MI AE2 样板供应器",
-  "config.mi_ae2_pattern_provider.category.quantum_overclock": "量子超频模块",
-  "config.mi_ae2_pattern_provider.parallel_multiplier": "并行倍率",
-  "config.mi_ae2_pattern_provider.parallel_multiplier.tooltip": "乘在处理阵列的机器数上（机器数上限 64，即 64 台机器 × 4 = 256 并行）。这只是上限：实际并行还会被输入料量与输出格空间二次夹紧，装不下时自动降倍率而不是丢产物。保存后立即对下一次配方计算生效，不需要重启游戏。",
   "mod.mi_ae2_pattern_provider": "MI AE2 样板供应器",
   "message.mi_ae2_pattern_provider.quantum_needs_array": "量子超频模块仅支持处理阵列",
   "text.mi_ae2_pattern_provider.device_online": "设备在线",
@@ -29,5 +25,9 @@
   "gui.mi_ae2_pattern_provider.page_prev": "上一页",
   "gui.mi_ae2_pattern_provider.page_next": "下一页",
   "gui.mi_ae2_pattern_provider.rename_title": "重命名这个仓",
-  "gui.mi_ae2_pattern_provider.rename_hint": "留空表示恢复默认名称"
+  "gui.mi_ae2_pattern_provider.rename_hint": "留空表示恢复默认名称",
+  "mi_ae2_pattern_provider.configuration.title": "ME样板供应仓",
+  "mi_ae2_pattern_provider.configuration.quantum_overclock": "量子超频",
+  "mi_ae2_pattern_provider.configuration.quantum_overclock.parallel_multiplier": "并行倍率",
+  "mi_ae2_pattern_provider.configuration.quantum_overclock.parallel_multiplier.tooltip": "乘在处理阵列的机器数上，作为并行批次上限（4 倍时 64 台机器 → 256 并行）。实际批次还会被输入量与输出格空间夹紧，所以调高绝不会销毁产物，只是未必能吃到。下一次配方计算即生效，不需要重启。"
 }

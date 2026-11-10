@@ -6,7 +6,7 @@
 
 **CurseForge（主发布渠道）**：<https://www.curseforge.com/minecraft/mc-mods/modern-industrialization-ae2-pattern-provider>
 
-支持 **Minecraft 1.21.1（NeoForge 21.1.219+）**，必需依赖 Modern Industrialization、Extended Industrialization、Applied Energistics 2（ExtendedAE、Cloth Config 为可选）。
+支持 **Minecraft 1.21.1（NeoForge 21.1.219+）**，必需依赖 Modern Industrialization、Extended Industrialization、Applied Energistics 2（ExtendedAE 为可选）。
 
 ## 功能
 
@@ -59,7 +59,7 @@
   `getMaxMultiplier()` 是**线圈档位的批处理上限**，不是机器数），本 mod 刻意不碰它们。
   倍率在 `config/mi_ae2_pattern_provider-common.toml` 的 `[quantum_overclock] parallel_multiplier` 里改
   （默认 4、范围 2–16；该文件的绝对路径会在启动时以 INFO 打进日志）。
-  **装了 [Cloth Config](https://modrinth.com/mod/cloth-config) 就能在「Mods 界面 → 本 mod → Config」里游戏内直接改**，
+  **游戏内也能直接改（NeoForge 自带的配置界面，不需要额外模组）：Mods 界面 → 本 mod → Config**，
   保存后**立即对下一次配方计算生效、不需要重启游戏**（倍率是每次算并行时现读的，这条有冒烟自检钉住）。
   两个超频模块都列在 **MI 自己的创造栏**里（紧跟原版超频模块之后，方便对照），因此在 JEI 里直接搜得到。
   为什么上限是 16×：本仓输出空间 `36 格 × 64 = 2304` 件，官方配方里「每批物品产物量 P」的分布是

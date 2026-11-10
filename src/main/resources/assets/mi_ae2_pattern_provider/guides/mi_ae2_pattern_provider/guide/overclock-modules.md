@@ -84,7 +84,7 @@ parallel_multiplier = 4   # range 2-16
 
 The full path to that file is printed to the log at startup.
 
-With [Cloth Config](https://modrinth.com/mod/cloth-config) installed you can change it in game instead:
+You can also change it in game — no extra mod needed (NeoForge's own config screen):
 **Mods screen → MI AE2 Pattern Provider → Config**. Changes apply to the **next recipe calculation** — no game
 restart, no world reload.
 

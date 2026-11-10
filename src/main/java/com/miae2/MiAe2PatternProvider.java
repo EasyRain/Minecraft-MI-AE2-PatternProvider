@@ -4,7 +4,7 @@ import appeng.api.AECapabilities;
 import appeng.api.networking.IInWorldGridNodeHost;
 import aztech.modern_industrialization.MIItem;
 import com.miae2.ae.MePatternProviderUpgrades;
-import com.miae2.client.MiAe2ConfigScreen;
+import com.miae2.client.MiAe2ConfigScreens;
 import com.miae2.compat.MeProviderTopPlugin;
 import com.miae2.config.MiAe2Config;
 import com.miae2.guide.MiAe2Guide;
@@ -71,13 +71,12 @@ public class MiAe2PatternProvider {
         modContainer.registerConfig(ModConfig.Type.COMMON, MiAe2Config.SPEC);
         // 这个值藏在 config 里，玩家不容易找到——启动时把文件位置直接打进日志。
         LOGGER.info("量子超频模块的并行倍率可在 {} 里调整（键 quantum_overclock.parallel_multiplier；"
-                        + "装了 Cloth Config 也能在 Mods 界面点本 mod 的 Config 按钮改，保存即生效）",
+                        + "也可以在 Mods 界面点本 mod 的 Config 按钮改，保存即生效）",
                 FMLPaths.CONFIGDIR.get().resolve(MOD_ID + "-common.toml"));
-        // 可选集成：Cloth Config 的游戏内配置界面。IConfigScreenFactory 是客户端专属类
-        // （net.neoforged.neoforge.client.gui），专用服上加载即 NoClassDefFoundError，
-        // 所以引用它的代码关在 MiAe2ConfigScreen 里，这里双重守护之后才调用那个类。
-        if (FMLEnvironment.dist.isClient() && ModList.get().isLoaded("cloth_config")) {
-            MiAe2ConfigScreen.register(modContainer);
+        // 游戏内配置界面：**用 NeoForge 自带的 ConfigurationScreen**（不再依赖 Cloth Config）。
+        // IConfigScreenFactory 是客户端专属类型，所以只在 Dist.CLIENT 下调用那个客户端类。
+        if (FMLEnvironment.dist.isClient()) {
+            MiAe2ConfigScreens.register(modContainer);
         }
         // 把两个超频模块插进 MI 的创造栏（JEI 的物品列表就是创造栏的内容，不进栏就等于「搜不到」）。
         modEventBus.addListener(MiAe2PatternProvider::onBuildCreativeTabContents);

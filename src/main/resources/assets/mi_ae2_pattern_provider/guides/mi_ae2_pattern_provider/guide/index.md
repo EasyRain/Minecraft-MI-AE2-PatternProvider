@@ -59,5 +59,4 @@ written the way they actually look in game ("stuck at *Waiting*", "Structure inv
 | [ExtendedAE](https://modrinth.com/mod/extended-ae) | Optional — only for the extended hatch |
 | [ExtendedAE-Plus](https://github.com/GaLicn/ExtendedAE_Plus) | Optional — adds upgrade cards (channel card, capacity card) |
 | [AppliedFlux](https://github.com/GlodBlock/AppliedFlux) | Optional — adds the induction card |
-| [Cloth Config](https://modrinth.com/mod/cloth-config) | Optional — lets you change the parallel multiplier in game |
 | [Jade](https://modrinth.com/mod/jade) / [The One Probe](https://modrinth.com/mod/the-one-probe) | Optional — show "Device Online / Offline" on the hatch |

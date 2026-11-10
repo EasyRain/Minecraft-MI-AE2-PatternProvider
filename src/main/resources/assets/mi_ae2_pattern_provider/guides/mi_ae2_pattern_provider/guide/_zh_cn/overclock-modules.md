@@ -73,7 +73,7 @@ parallel_multiplier = 4   # 范围 2-16
 
 该文件的完整路径会在启动时打进日志。
 
-装了 [Cloth Config](https://modrinth.com/mod/cloth-config) 就能在游戏内改：
+也可以直接在游戏内改（用 NeoForge 自带的配置界面，不需要额外模组）：
 **Mods 界面 → MI AE2 Pattern Provider → Config**。保存后**下一次配方计算**即生效 —— 不需要重启游戏，也不需要重载世界。
 
 ### 为什么上限是 16
