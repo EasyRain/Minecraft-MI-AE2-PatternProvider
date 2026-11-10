@@ -120,6 +120,10 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
 
     // 当前正在处理（累计发配材料中 / 机器制作中）的样板；null 表示空闲
     private IPatternDetails activePattern;
+    /** 当前在途的样板（给「智能阻挡」判断用：同一样板不算挡住）。 */
+    public IPatternDetails miae2$activePattern() {
+        return this.activePattern;
+    }
 
     // 输出格容量守卫的告警去重：只在「口径不一致」这个状态第一次出现时报一次，恢复正常后重置
     private boolean capacityGuardWarned;

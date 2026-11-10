@@ -85,10 +85,13 @@ public class MePatternProviderLogic extends PatternProviderLogic {
         if (this.getCraftingLockedReason() != LockCraftingMode.NONE) {
             return false;
         }
-        // 原版「阻挡模式」：本仓输入表里已经存有样板输入时就不再接收，等机器消耗完再发下一份。
-        // 判据对齐 AE2 基类那句 `!this.isBlocking() || !adapter.containsPatternInput(this.patternInputs)`
-        // —— 的"目标"在我们这里就是本仓自己的输入表。
-        if (this.isBlocking() && this.miae2$inputTableHasAnyPatternInput()) {
+        // 原版「阻挡模式」——语义对齐 ExtendedAE-Plus 的「智能阻挡（Smart Blocking）」：
+        // **同一种样板不阻挡**，只有「换样板 / 残留的是别的样板的输入」时才挡（2026-11-10 用户口径）。
+        // 原版阻挡（EAEP 智能阻挡关掉时）是「输入表里有任何样板输入就挡」，那会让 1 出 1 的大单
+        // 一次只发一批、等机器吃空再发，吞吐掉一大截。
+        if (this.isBlocking()
+                && this.be.miae2$activePattern() != patternDetails
+                && this.miae2$inputTableHasAnyPatternInput()) {
             return false;
         }
         if (!this.be.pushPattern(patternDetails, inputHolder)) {
