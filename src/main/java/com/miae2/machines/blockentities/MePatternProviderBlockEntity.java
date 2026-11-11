@@ -120,6 +120,14 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
 
     // 当前正在处理（累计发配材料中 / 机器制作中）的样板；null 表示空闲
     private IPatternDetails activePattern;
+    /**
+     * 拆卸时用来**拦截** {@link #dropExtra()} 的收集器。
+     *
+     * <p>非 null 时 {@code dropExtra()} 把内容塞进它并返回空列表 ⇒ MI 的
+     * `MachineBlock#onRemove` 就不会把东西弹到地上，改由我们自己塞进背包。
+     * 这样不依赖实体扫描，也就不会被磁铁 / 自动拾取类 mod 抢走（2026-11-11 用户提问）。
+     */
+    private List<ItemStack> miae2$capturedDrops;
     /** 当前在途的样板（给「智能阻挡」判断用：同一样板不算挡住）。 */
     public IPatternDetails miae2$activePattern() {
         return this.activePattern;
@@ -615,6 +623,10 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
     public List<ItemStack> dropExtra() {
         List<ItemStack> drops = super.dropExtra();
         this.logic.addDrops(drops);
+        if (this.miae2$capturedDrops != null) {
+            this.miae2$capturedDrops.addAll(drops);
+            return List.of();   // 交给拆卸流程进背包，不弹到地上
+        }
         return drops;
     }
 
@@ -678,27 +690,42 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
             return false;
         }
         if (!this.level.isClientSide) {
-            var drops = new java.util.ArrayList<net.minecraft.world.item.ItemStack>();
-            var drop = new net.minecraft.world.item.ItemStack(this.getBlockState().getBlock());
-            // 拆卸保留自定义名（与挖掘掉落一致）
+            var pos = this.getBlockPos();
+
+            // 1) 方块本体（带自定义名）先收进背包
+            var blockItem = new net.minecraft.world.item.ItemStack(this.getBlockState().getBlock());
             if (this.customName != null && !this.customName.getString().isBlank()) {
-                drop.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, this.customName);
+                blockItem.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, this.customName);
             }
-            drops.add(drop);
-            // **内部东西一起带走**（AE2 的拆卸语义）：样板、返回栏、在途输出等。
-            // 必须在 removeBlock 之前取，否则方块实体已经不在、库存取不到。
-            drops.addAll(this.dropExtra());
-            this.level.removeBlock(this.getBlockPos(), false);
-            // 与原版 AE 一致：优先收进背包，放不下才掉地，并播放拾取音效。
-            for (var stack : drops) {
+            if (!player.getInventory().add(blockItem) && !blockItem.isEmpty()) {
+                net.minecraft.world.level.block.Block.popResource(this.level, pos, blockItem);
+            }
+
+            // 2) 移除方块：MI 的 `MachineBlock#onRemove` 会调 `dropExtra()`。
+            //    我们把它的返回“拦截”下来（见 miae2$capturedDrops），所以不会有东西被弹到地上，
+            //    也就不会被磁铁 / 自动拾取类 mod 抢走。
+            var captured = new java.util.ArrayList<net.minecraft.world.item.ItemStack>();
+            this.miae2$capturedDrops = captured;
+            try {
+                this.level.removeBlock(pos, false);
+            } finally {
+                this.miae2$capturedDrops = null;
+            }
+
+            // 3) 内部东西：优先进背包，放不下才掉地
+            for (var stack : captured) {
                 if (stack.isEmpty()) {
                     continue;
                 }
-                if (!player.getInventory().add(stack)) {
-                    net.minecraft.world.level.block.Block.popResource(this.level, this.getBlockPos(), stack);
+                boolean added = player.getInventory().add(stack);
+                LOGGER.info("[Dismantle] carried {} x{} added={} remaining={}",
+                        stack.getItem(), stack.getCount(), added, stack.isEmpty() ? 0 : stack.getCount());
+                if (!stack.isEmpty()) {
+                    net.minecraft.world.level.block.Block.popResource(this.level, pos, stack);
                 }
             }
-            this.level.playSound(null, this.getBlockPos(),
+
+            this.level.playSound(null, pos,
                     net.minecraft.sounds.SoundEvents.ITEM_PICKUP,
                     net.minecraft.sounds.SoundSource.BLOCKS, 0.6F, 1.0F);
         }

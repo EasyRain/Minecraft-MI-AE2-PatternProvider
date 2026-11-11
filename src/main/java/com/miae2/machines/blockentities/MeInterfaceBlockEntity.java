@@ -952,27 +952,40 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
             return false;
         }
         if (!this.level.isClientSide) {
-            var drops = new java.util.ArrayList<net.minecraft.world.item.ItemStack>();
-            var drop = new net.minecraft.world.item.ItemStack(this.getBlockState().getBlock());
-            // 拆卸保留自定义名（与挖掘掉落一致）
+            var pos = this.getBlockPos();
+
+            // 1) 方块本体（带自定义名）先收进背包
+            var blockItem = new net.minecraft.world.item.ItemStack(this.getBlockState().getBlock());
             if (this.customName != null && !this.customName.getString().isBlank()) {
-                drop.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, this.customName);
+                blockItem.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, this.customName);
             }
-            drops.add(drop);
-            // **内部东西一起带走**（AE2 的拆卸语义）：样板、返回栏、在途输出等。
-            // 必须在 removeBlock 之前取，否则方块实体已经不在、库存取不到。
-            drops.addAll(this.dropExtra());
-            this.level.removeBlock(this.getBlockPos(), false);
-            // 与原版 AE 一致：优先收进背包，放不下才掉地，并播放拾取音效。
-            for (var stack : drops) {
+            if (!player.getInventory().add(blockItem) && !blockItem.isEmpty()) {
+                net.minecraft.world.level.block.Block.popResource(this.level, pos, blockItem);
+            }
+
+            // 2) 移除方块：拦截 onRemove 的 dropExtra()（见 miae2$capturedDrops）
+            var captured = new java.util.ArrayList<net.minecraft.world.item.ItemStack>();
+            this.miae2$capturedDrops = captured;
+            try {
+                this.level.removeBlock(pos, false);
+            } finally {
+                this.miae2$capturedDrops = null;
+            }
+
+            // 3) 内部东西：优先进背包，放不下才掉地
+            for (var stack : captured) {
                 if (stack.isEmpty()) {
                     continue;
                 }
-                if (!player.getInventory().add(stack)) {
-                    net.minecraft.world.level.block.Block.popResource(this.level, this.getBlockPos(), stack);
+                boolean added = player.getInventory().add(stack);
+                LOGGER.info("[Dismantle] carried {} x{} added={} remaining={}",
+                        stack.getItem(), stack.getCount(), added, stack.isEmpty() ? 0 : stack.getCount());
+                if (!stack.isEmpty()) {
+                    net.minecraft.world.level.block.Block.popResource(this.level, pos, stack);
                 }
             }
-            this.level.playSound(null, this.getBlockPos(),
+
+            this.level.playSound(null, pos,
                     net.minecraft.sounds.SoundEvents.ITEM_PICKUP,
                     net.minecraft.sounds.SoundSource.BLOCKS, 0.6F, 1.0F);
         }
@@ -1003,6 +1016,19 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
                 }
             }
         }
+    }
+
+    /** 拆卸时拦截 {@link #dropExtra()} 的收集器（理由见供应仓同名字段）。 */
+    private List<net.minecraft.world.item.ItemStack> miae2$capturedDrops;
+
+    @Override
+    public List<net.minecraft.world.item.ItemStack> dropExtra() {
+        List<net.minecraft.world.item.ItemStack> drops = super.dropExtra();
+        if (this.miae2$capturedDrops != null) {
+            this.miae2$capturedDrops.addAll(drops);
+            return List.of();
+        }
+        return drops;
     }
 
     // ---------- Nameable ----------
