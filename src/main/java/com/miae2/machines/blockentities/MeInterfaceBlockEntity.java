@@ -966,6 +966,25 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
             // 2) 移除方块：拦截 onRemove 的 dropExtra()（见 miae2$capturedDrops）
             var captured = new java.util.ArrayList<net.minecraft.world.item.ItemStack>();
             this.miae2$capturedDrops = captured;
+
+            // 2b) **AE 侧的保持量也要带走**：接口的库存真相在 AE 的 `GenericStackInv` 上，
+            //     MI 的物品槽只是镜像（而且大多是配置槽、不是 MI 的 DropableComponent），
+            //     所以单靠 dropExtra() 拿不到东西（2026-11-11 实测：接口仓拆卸后内容消失）。
+            try {
+                var storage = this.logic.getStorage();
+                for (int i = 0; i < storage.size(); i++) {
+                    var gs = storage.getStack(i);
+                    if (gs != null && gs.what() instanceof appeng.api.stacks.AEItemKey key) {
+                        int amount = (int) Math.min(gs.amount(), Integer.MAX_VALUE);
+                        if (amount > 0) {
+                            captured.add(key.toStack(amount));
+                        }
+                        storage.setStack(i, null);
+                    }
+                }
+            } catch (Throwable t) {
+                LOGGER.warn("[Dismantle] 读取 AE 库存失败：{}", t.toString());
+            }
             try {
                 this.level.removeBlock(pos, false);
             } finally {
