@@ -947,6 +947,51 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
     }
 
     /** 扳手 + Shift：直接把方块拆下来（与 AE2 一致）。 */
+
+    /**
+     * 拆卸前把 MI 侧物品槽清空并收集出来。
+     *
+     * <p>为什么必须做：MI 移除方块时会把它自己的库存也弹到地上（`MachineBlock#onRemove` 那条路），
+     * 和我们的「拦截 dropExtra → 进背包」各走各的 ⇒ **同一份东西既进背包又掉地**（2026-11-11 实测
+     * 接口仓双份、供应仓 MI 侧东西掉地）。先把槽位掏空，MI 就没东西可弹。
+     */
+    private void miae2$drainItemSlots(java.util.List<net.minecraft.world.item.ItemStack> out) {
+        for (var slot : this.itemInputs) {
+            miae2$drainOneSlot(slot, out);
+        }
+        for (var slot : this.itemOutputs) {
+            miae2$drainOneSlot(slot, out);
+        }
+    }
+
+    private static void miae2$drainOneSlot(aztech.modern_industrialization.inventory.ConfigurableItemStack slot,
+                                           java.util.List<net.minecraft.world.item.ItemStack> out) {
+        long amount = slot.getAmount();
+        if (amount <= 0) {
+            return;
+        }
+        var variant = slot.getResource();
+        if (variant == null || variant.equals(aztech.modern_industrialization.thirdparty.fabrictransfer.api.item.ItemVariant.blank())) {
+            return;
+        }
+        int stackAmount = (int) Math.min(amount, Integer.MAX_VALUE);
+        if (stackAmount > 0) {
+            out.add(variant.toStack(stackAmount));
+        }
+        slot.setAmount(0);
+    }
+
+
+    /** 只清空 MI 侧物品槽（接口仓用：真数据在上面那步已从 AE 库存收走）。 */
+    private void miae2$clearItemSlots() {
+        for (var slot : this.itemInputs) {
+            slot.setAmount(0);
+        }
+        for (var slot : this.itemOutputs) {
+            slot.setAmount(0);
+        }
+    }
+
     private boolean miae2$dismantleIfShift(net.minecraft.world.entity.player.Player player) {
         if (!player.isShiftKeyDown()) {
             return false;
@@ -966,6 +1011,9 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
             // 2) 移除方块：拦截 onRemove 的 dropExtra()（见 miae2$capturedDrops）
             var captured = new java.util.ArrayList<net.minecraft.world.item.ItemStack>();
             this.miae2$capturedDrops = captured;
+            // MI 侧只是 AE 的**镜像** ⇒ 只清空、不收集（AE 那份已经在上一步收走了），
+            // 否则同一份东西会被收两次。
+            this.miae2$clearItemSlots();
 
             // 2b) **AE 侧的保持量也要带走**：接口的库存真相在 AE 的 `GenericStackInv` 上，
             //     MI 的物品槽只是镜像（而且大多是配置槽、不是 MI 的 DropableComponent），
