@@ -1031,7 +1031,6 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
                     }
                 }
             } catch (Throwable t) {
-                LOGGER.warn("[Dismantle] 读取 AE 库存失败：{}", t.toString());
             }
             try {
                 this.level.removeBlock(pos, false);
@@ -1045,8 +1044,6 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
                     continue;
                 }
                 boolean added = player.getInventory().add(stack);
-                LOGGER.info("[Dismantle] carried {} x{} added={} remaining={}",
-                        stack.getItem(), stack.getCount(), added, stack.isEmpty() ? 0 : stack.getCount());
                 if (!stack.isEmpty()) {
                     net.minecraft.world.level.block.Block.popResource(this.level, pos, stack);
                 }

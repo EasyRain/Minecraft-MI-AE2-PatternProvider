@@ -754,8 +754,6 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
                     continue;
                 }
                 boolean added = player.getInventory().add(stack);
-                LOGGER.info("[Dismantle] carried {} x{} added={} remaining={}",
-                        stack.getItem(), stack.getCount(), added, stack.isEmpty() ? 0 : stack.getCount());
                 if (!stack.isEmpty()) {
                     net.minecraft.world.level.block.Block.popResource(this.level, pos, stack);
                 }
