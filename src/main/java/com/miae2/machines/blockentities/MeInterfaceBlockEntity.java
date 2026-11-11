@@ -952,15 +952,25 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
             return false;
         }
         if (!this.level.isClientSide) {
+            var drops = new java.util.ArrayList<net.minecraft.world.item.ItemStack>();
             var drop = new net.minecraft.world.item.ItemStack(this.getBlockState().getBlock());
             // 拆卸保留自定义名（与挖掘掉落一致）
             if (this.customName != null && !this.customName.getString().isBlank()) {
                 drop.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME, this.customName);
             }
+            drops.add(drop);
+            // **内部东西一起带走**（AE2 的拆卸语义）：样板、返回栏、在途输出等。
+            // 必须在 removeBlock 之前取，否则方块实体已经不在、库存取不到。
+            drops.addAll(this.dropExtra());
             this.level.removeBlock(this.getBlockPos(), false);
             // 与原版 AE 一致：优先收进背包，放不下才掉地，并播放拾取音效。
-            if (!player.getInventory().add(drop)) {
-                net.minecraft.world.level.block.Block.popResource(this.level, this.getBlockPos(), drop);
+            for (var stack : drops) {
+                if (stack.isEmpty()) {
+                    continue;
+                }
+                if (!player.getInventory().add(stack)) {
+                    net.minecraft.world.level.block.Block.popResource(this.level, this.getBlockPos(), stack);
+                }
             }
             this.level.playSound(null, this.getBlockPos(),
                     net.minecraft.sounds.SoundEvents.ITEM_PICKUP,
