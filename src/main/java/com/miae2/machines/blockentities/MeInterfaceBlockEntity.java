@@ -254,6 +254,7 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
         this.miae2$syncInputsFromInterface();
         this.miae2$drainOutputsToNetwork();
         this.miae2$updateYieldLocks();
+        this.miae2$ensureOwner();
     }
 
     /** 节点创建兜底（样板仓里是同样的写法，理由见那里的注释）。 */
@@ -289,20 +290,33 @@ public class MeInterfaceBlockEntity extends HatchBlockEntity
      * 拿不到回退所有者（{@code getOwningPlayerProfileId()} 为 null）⇒ 未绑定的卡连不上。
      * 这里用 MI 自己持久化的放置者 {@code placedBy.placerId} 回填（找不到人就算了，无副作用）。
      */
+    /** 补写结束后就不再重试（成功、或信息不全放弃）。 */
+    private boolean miae2$ownerSettled;
+
     private void miae2$ensureOwner() {
+        if (this.miae2$ownerSettled || this.level == null) {
+            return;
+        }
         var node = this.mainNode.getNode();
-        if (node == null || node.getOwningPlayerProfileId() != null || this.level == null) {
+        if (node == null) {
+            return; // 节点还没建好，下一秒再试
+        }
+        if (node.getOwningPlayerProfileId() != null) {
+            this.miae2$ownerSettled = true;
             return;
         }
         java.util.UUID placer = this.placedBy.placerId;
         if (placer == null || this.level.getServer() == null) {
+            this.miae2$ownerSettled = true; // 没有放置者记录 ⇒ 放弃，不再每秒重试
             return;
         }
         var player = this.level.getServer().getPlayerList().getPlayer(placer);
         if (player != null) {
             this.mainNode.setOwningPlayer(player);
+            this.miae2$ownerSettled = true;
             LOGGER.info("[节点] 已按放置者补写 AE 节点 owner @ {}", this.getBlockPos());
         }
+        // 玩家还不在线（读档瞬间）⇒ 保留未 settled，下一秒继续
     }
 
     /** 反射请求 EAEP 的频道卡控制器重建无线链路；没装 EAEP 时静默跳过。 */

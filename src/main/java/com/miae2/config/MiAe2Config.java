@@ -40,6 +40,15 @@ public final class MiAe2Config {
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
 
     public static final ModConfigSpec.IntValue QUANTUM_PARALLEL_MULTIPLIER;
+
+    /**
+     * 是否让「产物又是原料」的自回收样板跳过 ExtendedAE-Plus 的智能翻倍。
+     *
+     * <p>EAEP 的翻倍会把 N 次合成合并成一次材料包，而自回收配方要求「先有副产物才能凑够原料」，
+     * 于是 AE 的合成模拟永远判定不可合成（**原版 AE 供应仓同样会卡**，2026-11-13 用户实测）。
+     * 本仓默认对这类样板单独跳过翻倍，避免卡死；不需要这个兼容的整合包可以关掉。
+     */
+    public static final ModConfigSpec.BooleanValue SKIP_EAEP_DOUBLING_FOR_RECURSIVE_PATTERNS;
     public static final ModConfigSpec SPEC;
 
     static {
@@ -55,6 +64,11 @@ public final class MiAe2Config {
                 .defineInRange("parallel_multiplier", QUANTUM_PARALLEL_DEFAULT,
                         QUANTUM_PARALLEL_MIN, QUANTUM_PARALLEL_MAX);
         BUILDER.pop();
+        SKIP_EAEP_DOUBLING_FOR_RECURSIVE_PATTERNS = BUILDER
+                .comment("让「产物又是原料」的样板跳过 ExtendedAE-Plus 的智能翻倍（默认开）。",
+                        "这类自回收配方在翻倍下会让 AE 合成模拟死循环、任务永远等待（原版 AE 供应仓同样会卡），",
+                        "开启本项后本 mod 的仓只对这类样板关闭翻倍，其它样板照常享受翻倍。")
+                .define("skip_eaep_doubling_for_recursive_patterns", true);
         SPEC = BUILDER.build();
     }
 
@@ -95,5 +109,14 @@ public final class MiAe2Config {
     }
 
     private MiAe2Config() {
+    }
+
+    /** 自回收样板是否跳过 EAEP 智能翻倍（配置未加载时按默认 true）。 */
+    public static boolean skipEaepDoublingForRecursivePatterns() {
+        try {
+            return SKIP_EAEP_DOUBLING_FOR_RECURSIVE_PATTERNS.get();
+        } catch (Throwable notLoaded) {
+            return true;
+        }
     }
 }

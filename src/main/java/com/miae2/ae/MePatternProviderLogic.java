@@ -68,6 +68,129 @@ public class MePatternProviderLogic extends PatternProviderLogic {
         this.be = be;
     }
 
+    private int miae2$patternLogTicks;
+
+    /**
+     * AE 的合成计算从这里拿样板。
+     *
+     * <p>诊断日志：每 5 秒打一次样板数量与类名（排查 EAEP 翻倍问题用，发版前删掉）。
+     */
+    @Override
+    public java.util.List<IPatternDetails> getAvailablePatterns() {
+        var patterns = super.getAvailablePatterns();
+        miae2$disableEaepScalingForFluidPatterns(patterns);
+        if (this.be.getLevel() != null && !this.be.getLevel().isClientSide()
+                && this.be.getLevel().getGameTime() - this.miae2$patternLogTicks > 100) {
+            this.miae2$patternLogTicks = (int) this.be.getLevel().getGameTime();
+            var kinds = new StringBuilder();
+            for (var details : patterns) {
+                if (kinds.length() > 0) {
+                    kinds.append(", ");
+                }
+                kinds.append(details.getClass().getSimpleName());
+            }
+            long requested = 0;
+            var grid = this.getGrid();
+            if (grid != null) {
+                for (var details : patterns) {
+                    for (var output : details.getOutputs()) {
+                        requested += grid.getCraftingService().getRequestedAmount(output.what());
+                    }
+                }
+            }
+        }
+        return patterns;
+    }
+
+    // ---------- EAEP「智能翻倍」兼容：只对「含流体」的样板关闭放大 ----------
+    //
+    // 实测（2026-11-13）：TNT 1000 等普通样板经翻倍后能正常派单；而「硫酸锰溶液既是原料又是副产物」
+    // 这类自回收配方翻倍后 AE 根本不派单（合成模拟死循环）。
+    // EAEP 的倍率计算对每种输入键取「单位倍率」再取最小值（`PatternScaler.getComputedMul`），
+    // 流体键那条路算出来的倍率让 scaled 样板失效 ⇒ 我们只对含流体的样板标记「不可放大」，
+    // 纯物品样板继续享受翻倍（百万级合成的主要收益来源）。
+    private static boolean miae2$eaepProbed;
+    private static java.lang.reflect.Method miae2$allowScalingSetter;
+    private static boolean miae2$eaepFixedLogged;
+    private static boolean miae2$eaepLogged;
+
+    private void miae2$disableEaepScalingForFluidPatterns(java.util.List<IPatternDetails> patterns) {
+        if (patterns.isEmpty() || !com.miae2.config.MiAe2Config.skipEaepDoublingForRecursivePatterns()) {
+            return;
+        }
+        miae2$probeEaep();
+        if (miae2$allowScalingSetter == null) {
+            return;
+        }
+        for (var details : patterns) {
+            if (!miae2$isEaepAware(details) || !miae2$hasRecursiveKey(details)) {
+                continue;
+            }
+            try {
+                miae2$allowScalingSetter.invoke(details, false);
+                if (!miae2$eaepLogged) {
+                    miae2$eaepLogged = true;
+                    LOGGER.info("[EAEP] 已对自回收样板单独关闭智能翻倍（仅这些样板；同仓其它样板不受影响）：{}",
+                            details.getOutputs());
+                }
+            } catch (Throwable ignored) {
+                // EAEP 改版也不该影响发料
+            }
+        }
+    }
+
+    /**
+     * 样板是否有「**同一个键既是输入又是输出**」的配方（副产物回收型）。
+     *
+     * <p>2026-11-13 用户实测定位：被卡住的配方是
+     * {@code 3000mB 硫酸锰溶液 + 4 粗钛矿 → 4 热钛锭 + 2500mB 硫酸锰溶液}
+     * —— 硫酸锰溶液同时是原料和副产物。EAEP 的智能翻倍会把样板整体放大，
+     * 这类**自回收配方**在合成模拟里会要求「先有副产物才能凑够原料」，
+     * 而副产物要先发配才能产出 ⇒ 死循环，AE 于是根本不派单（`[PushEntry]` 一条都没有）。
+     *
+     * <p>所以只对这类样板关闭放大；普通样板（哪怕带流体输出/输入）保持翻倍。
+     */
+    private static boolean miae2$hasRecursiveKey(IPatternDetails details) {
+        var outputs = new java.util.HashSet<appeng.api.stacks.AEKey>();
+        for (var output : details.getOutputs()) {
+            outputs.add(output.what());
+        }
+        if (outputs.isEmpty()) {
+            return false;
+        }
+        for (var input : details.getInputs()) {
+            for (var possible : input.getPossibleInputs()) {
+                if (outputs.contains(possible.what())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean miae2$isEaepAware(Object pattern) {
+        for (var type : pattern.getClass().getInterfaces()) {
+            if (type.getName().endsWith("ISmartDoublingAwarePattern")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static void miae2$probeEaep() {
+        if (miae2$eaepProbed) {
+            return;
+        }
+        miae2$eaepProbed = true;
+        try {
+            var type = Class.forName("com.extendedae_plus.api.smartDoubling.ISmartDoublingAwarePattern");
+            miae2$allowScalingSetter = type.getMethod("eap$setAllowScaling", boolean.class);
+        } catch (Throwable absent) {
+            miae2$allowScalingSetter = null;
+        }
+
+    }
+
     @Override
     public boolean pushPattern(IPatternDetails patternDetails, KeyCounter[] inputHolder) {
         if (this.getGrid() == null || !this.miae2$isAcceptablePattern(patternDetails)) {

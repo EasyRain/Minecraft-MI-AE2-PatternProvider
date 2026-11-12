@@ -120,6 +120,7 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
 
     // 当前正在处理（累计发配材料中 / 机器制作中）的样板；null 表示空闲
     private IPatternDetails activePattern;
+    private int miae2$stuckTicks;
     /**
      * 拆卸时用来**拦截** {@link #dropExtra()} 的收集器。
      *
@@ -279,21 +280,35 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
      * 这里用 MI 自己持久化的「放置者」（{@code placedBy.placerId}）回填：只要放置者在线就补上。
      * 纯兜底，找不到人就等下次读档——不会有副作用。
      */
+    /** 补写结束后就不再重试（成功、或信息不全放弃）。 */
+    private boolean miae2$ownerSettled;
+
     private void miae2$ensureOwner() {
-        var node = this.mainNode.getNode();
-        if (node == null || node.getOwningPlayerProfileId() != null || this.level == null) {
+        if (this.miae2$ownerSettled || this.level == null) {
             return;
         }
-        UUID placer = this.placedBy.placerId;
+        var node = this.mainNode.getNode();
+        if (node == null) {
+            return; // 节点还没建好，下一秒再试
+        }
+        if (node.getOwningPlayerProfileId() != null) {
+            this.miae2$ownerSettled = true;
+            return;
+        }
+        java.util.UUID placer = this.placedBy.placerId;
         if (placer == null || this.level.getServer() == null) {
+            this.miae2$ownerSettled = true; // 没有放置者记录 ⇒ 放弃，不再每秒重试
             return;
         }
         var player = this.level.getServer().getPlayerList().getPlayer(placer);
         if (player != null) {
             this.mainNode.setOwningPlayer(player);
+            this.miae2$ownerSettled = true;
             LOGGER.info("[节点] 已按放置者补写 AE 节点 owner @ {}", this.getBlockPos());
         }
+        // 玩家还不在线（读档瞬间）⇒ 保留未 settled，下一秒继续
     }
+
 
     /** 反射请求 EAEP 的频道卡控制器重新建立无线链路；没装 EAEP 时静默跳过。 */
     private void miae2$restoreChannelCard() {
@@ -506,6 +521,14 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         this.drainOutputsToReturnInv();
         this.updateActivePattern();
         this.miae2$ensureIdleOutputLock();
+        // 诊断：有料在输入格、但阵列没有在途订单 ⇒ 机器没吃料（卡住）
+        if (this.miae2$hasAnyInput() && !this.miae2$isAnyCraftInFlight()) {
+            if (++this.miae2$stuckTicks % 100 == 0) {
+            }
+        } else {
+            this.miae2$stuckTicks = 0;
+        }
+        this.miae2$ensureOwner();
     }
 
     // ---------- IInWorldGridNodeHost ----------
@@ -1026,6 +1049,12 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
 
     /** 多方块控制器（任何形态：普通多方块 / EI 处理阵列 / Overdrive 多方块处理阵列）。 */
     @Nullable
+    /** 控制器方块实体的类名（null = 找不到控制器）；给「是否 Overdrive 阵列」之类的兼容判断用。 */
+    public String miae2$controllerClassName() {
+        var controller = this.findController();
+        return controller == null ? null : controller.getClass().getName();
+    }
+
     private BlockEntity findController() {
         if (this.controllerPos == null || this.level == null) {
             return null;
@@ -1331,6 +1360,38 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
             assigned++;
         }
         return quota;
+    }
+
+    /** 诊断用：把 push 的输入量拼成 "id xN, ..." */
+    private static String summarizeInputs(KeyCounter[] holders) {
+        var sb = new StringBuilder();
+        for (var holder : holders) {
+            if (holder == null) {
+                continue;
+            }
+            for (var key : holder.keySet()) {
+                if (sb.length() > 0) {
+                    sb.append(", ");
+                }
+                sb.append(key.getId()).append(" x").append(holder.get(key));
+            }
+        }
+        return sb.toString();
+    }
+
+    /** 诊断用：当前输入槽里有什么 */
+    private String miae2$summarizeInputSlots() {
+        var sb = new StringBuilder();
+        for (var slot : this.itemInputs) {
+            if (slot.isEmpty()) {
+                continue;
+            }
+            if (sb.length() > 0) {
+                sb.append(", ");
+            }
+            sb.append(slot.getResource().getItem()).append(" x").append(slot.getAmount());
+        }
+        return sb.toString();
     }
 
     private void unlockAllOutputs() {
