@@ -78,7 +78,7 @@ public class MePatternProviderLogic extends PatternProviderLogic {
     @Override
     public java.util.List<IPatternDetails> getAvailablePatterns() {
         var patterns = super.getAvailablePatterns();
-        miae2$disableEaepScalingForFluidPatterns(patterns);
+        miae2$disableEaepScalingForRecursivePatterns(patterns);
         if (this.be.getLevel() != null && !this.be.getLevel().isClientSide()
                 && this.be.getLevel().getGameTime() - this.miae2$patternLogTicks > 100) {
             this.miae2$patternLogTicks = (int) this.be.getLevel().getGameTime();
@@ -102,7 +102,7 @@ public class MePatternProviderLogic extends PatternProviderLogic {
         return patterns;
     }
 
-    // ---------- EAEP「智能翻倍」兼容：只对「含流体」的样板关闭放大 ----------
+    // ---------- EAEP「智能翻倍」兼容：只对「产物又是原料」的样板关闭放大 ----------
     //
     // 实测（2026-11-13）：TNT 1000 等普通样板经翻倍后能正常派单；而「硫酸锰溶液既是原料又是副产物」
     // 这类自回收配方翻倍后 AE 根本不派单（合成模拟死循环）。
@@ -114,7 +114,7 @@ public class MePatternProviderLogic extends PatternProviderLogic {
     private static boolean miae2$eaepFixedLogged;
     private static boolean miae2$eaepLogged;
 
-    private void miae2$disableEaepScalingForFluidPatterns(java.util.List<IPatternDetails> patterns) {
+    private void miae2$disableEaepScalingForRecursivePatterns(java.util.List<IPatternDetails> patterns) {
         if (patterns.isEmpty() || !com.miae2.config.MiAe2Config.skipEaepDoublingForRecursivePatterns()) {
             return;
         }
