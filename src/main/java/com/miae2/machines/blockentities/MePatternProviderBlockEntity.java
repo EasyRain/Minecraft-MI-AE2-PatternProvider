@@ -1582,6 +1582,9 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         if (switched) {
             this.activePattern = patternDetails;
             this.idleOutputsLocked = false;
+            // 切换后本 tick 内的缓存要立刻失效：否则同一 tick 里后续 push 会用到「切换前」算出的
+            // 「机器还脏」的旧值，把这一 tick 剩下的发配全拒掉（只影响切换瞬间的吞吐）。
+            this.miae2$cachedBusyOrDirty = false;
             this.lockOutputs(patternDetails);
             LOGGER.info("[样板切换] 输出格已按新样板上锁：{} @ {}", patternDetails.getOutputs(), this.getBlockPos());
         }
