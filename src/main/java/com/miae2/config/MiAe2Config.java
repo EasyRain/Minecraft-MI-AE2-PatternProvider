@@ -58,16 +58,9 @@ public final class MiAe2Config {
      * <p>AE 每次只推 1 批材料；开启后本仓会看网络里还能凑出几批，一次性塞给机器，
      * 缺的等下一轮。产物记账仍按 AE 那边（不会超发：上限取「AE 还在等的量」）。
      */
-    public static final ModConfigSpec.IntValue DISPATCH_BATCH_LIMIT;
 
-    /** 每个游戏 tick 最多接受几次 AE 的 pushPattern（超出就拒绝，下一 tick 再收）。 */
-    public static final ModConfigSpec.IntValue DISPATCH_PUSHES_PER_TICK;
 
-    /** 单次合并发配的物品总量预算（只约束「额外合并」的部分，AE 自己那批不受限）。 */
-    public static final ModConfigSpec.IntValue DISPATCH_ITEM_BUDGET;
 
-    /** 单次合并发配的流体总量预算（mB，同上，只约束额外合并的部分）。 */
-    public static final ModConfigSpec.IntValue DISPATCH_FLUID_BUDGET;
     public static final ModConfigSpec SPEC;
 
     static {
@@ -84,31 +77,11 @@ public final class MiAe2Config {
                         QUANTUM_PARALLEL_MIN, QUANTUM_PARALLEL_MAX);
         BUILDER.pop();
         SKIP_EAEP_DOUBLING_FOR_RECURSIVE_PATTERNS = BUILDER
-                .comment("让「产物又是原料」的样板跳过 ExtendedAE-Plus 的智能翻倍（默认开）。",
-                        "这类自回收配方在翻倍下会让 AE 合成模拟死循环、任务永远等待（原版 AE 供应仓同样会卡），",
-                        "开启本项后本 mod 的仓只对这类样板关闭翻倍，其它样板照常享受翻倍。")
+                .comment("本 mod 的仓不参与 ExtendedAE-Plus 的智能翻倍（默认开）。",
+                        "EAEP 的翻倍会把多次合成合并成一次材料包，遇到「产物又是原料」的自回收配方",
+                        "或跨机器的循环配方时会互相等待、任务卡死（原版 AE 供应仓同样会卡）。",
+                        "关掉本项则恢复由 EAEP 翻倍（可能复现卡死）。")
                 .define("skip_eaep_doubling_for_recursive_patterns", true);
-        DISPATCH_BATCH_LIMIT = BUILDER
-                .comment("单次合并发配最多合并几批（1 = 关闭，退回 AE 原生一批一发）。",
-                        "AE 只按原版记账，本 mod 的仓自己从网络补料、一次推给机器；",
-                        "不会超发：合并批数同时受「网络可用材料」和「AE 还在等的产物量」限制。",
-                        "调大 = 发配更快，但机器会在同一 tick 处理更多批，可能出现服务端卡顿；",
-                        "调小 = 每 tick 更平滑。默认 64。")
-                .defineInRange("dispatch_batch_limit", 64, 1, 4096);
-        DISPATCH_PUSHES_PER_TICK = BUILDER
-                .comment("每个游戏 tick 最多接受几次 AE 的 pushPattern（超出直接拒绝，让 AE 下一 tick 再试）。",
-                        "AE 有独立的 tick 调度，一个游戏 tick 内可能发起几百上千次发配；",
-                        "每次都会触发机器侧记账，是服务端卡顿的主因。默认 8，配合合并（默认每次最多 64 批）",
-                        "默认 0 = 不限制（AE 能推多少就收多少）；若某些整合包里仍卡，可设成 8~32 限流。")
-                .defineInRange("dispatch_pushes_per_tick", 0, 0, 10_000);
-        DISPATCH_ITEM_BUDGET = BUILDER
-                .comment("单次合并发配最多额外合并多少物品（只约束额外部分）。",
-                        "样板本身写得很大（一次上百万）时，这个值决定每次还能多合几批；",
-                        "调大 = 发配更快但单 tick 更重。")
-                .defineInRange("dispatch_item_budget", 2048, 0, 1_000_000);
-        DISPATCH_FLUID_BUDGET = BUILDER
-                .comment("单次合并发配最多额外合并多少 mB 流体（只约束额外部分），128000 = 128 桶。")
-                .defineInRange("dispatch_fluid_budget", 128_000, 0, 100_000_000);
         SPEC = BUILDER.build();
     }
 
@@ -160,39 +133,7 @@ public final class MiAe2Config {
         }
     }
 
-    /** 单次合并发配的批数上限（配置未加载时按 64）。 */
-    public static int dispatchBatchLimit() {
-        try {
-            return DISPATCH_BATCH_LIMIT.get();
-        } catch (Throwable notLoaded) {
-            return 64;
-        }
-    }
 
-    /** 单次合并的物品预算（配置未加载时按 2048）。 */
-    public static long dispatchItemBudget() {
-        try {
-            return Math.max(0, DISPATCH_ITEM_BUDGET.get());
-        } catch (Throwable notLoaded) {
-            return 2048L;
-        }
-    }
 
-    /** 单次合并的流体预算 mB（配置未加载时按 128000）。 */
-    public static long dispatchFluidBudget() {
-        try {
-            return Math.max(0, DISPATCH_FLUID_BUDGET.get());
-        } catch (Throwable notLoaded) {
-            return 128_000L;
-        }
-    }
 
-    /** 每 tick 最多接受的 pushPattern 次数（0 = 不限制；配置未加载时按 0）。 */
-    public static int dispatchPushesPerTick() {
-        try {
-            return Math.max(0, DISPATCH_PUSHES_PER_TICK.get());
-        } catch (Throwable notLoaded) {
-            return 0;
-        }
-    }
 }
