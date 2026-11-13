@@ -172,6 +172,16 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
      */
     private List<BlockPos> providerSiblingPositions = List.of();
 
+    /** 本 tick 内 AE 调用 pushPattern 的计数（用于按 tick 缓存重检查）。 */
+    private int miae2$pushesThisTick;
+    private long miae2$pushTickStamp = Long.MIN_VALUE;
+    /** 每 tick 只算一次的重检查结果：AE 一 tick 会调 pushPattern 几百上千次，逐次算会卡服务端。 */
+    private boolean miae2$cachedMatched;
+    private boolean miae2$cachedBusyOrDirty;
+    private boolean miae2$cachedCapacityTruthful;
+    private IPatternDetails miae2$cachedCheckPattern;
+
+
     public MePatternProviderBlockEntity(
             BEP bep,
             MachineGuiParameters guiParams,
@@ -269,6 +279,9 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
             return;
         }
         this.mainNode.create(this.level, this.getBlockPos());
+        if (this.level != null && !this.level.isClientSide()) {
+            miae2$INSTANCES.add(new java.lang.ref.WeakReference<>(this));
+        }
         this.miae2$ensureOwner();
         this.miae2$restoreChannelCard();
     }
@@ -506,6 +519,8 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
 
     @Override
     public void tick() {
+        if (this.level != null && !this.level.isClientSide()) {
+        }
         super.tick();
         if (this.level == null || this.level.isClientSide()) {
             return;
@@ -570,6 +585,27 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
 
     // ---------- PatternProviderLogicHost ----------
 
+    /** 全网络已加载的供应仓（环检测要按整张网络算，见 logic 的环检测）。 */
+    private static final java.util.List<java.lang.ref.WeakReference<MePatternProviderBlockEntity>> miae2$INSTANCES =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    /** 有效的、和服务端同 level 的供应仓。 */
+    public static java.util.List<MePatternProviderBlockEntity> miae2$liveProviders(net.minecraft.world.level.Level level) {
+        var out = new java.util.ArrayList<MePatternProviderBlockEntity>();
+        for (var ref : miae2$INSTANCES) {
+            var provider = ref.get();
+            if (provider != null && !provider.isRemoved() && provider.getLevel() == level) {
+                out.add(provider);
+            }
+        }
+        return out;
+    }
+
+    /** 同阵列的兄弟供应仓位置（环检测的兜底：正常情况下按全网络算）。 */
+    public List<BlockPos> miae2$siblingPositions() {
+        return this.providerSiblingPositions;
+    }
+
     @NotNull
     @Override
     public MePatternProviderLogic getLogic() {
@@ -594,6 +630,9 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
 
     @Override
     public AEItemKey getTerminalIcon() {
+        // 注意：**不要**在这里现场读控制器方块（getBlockEntity/getBlockState）——
+        // 该方法会在菜单/终端构建路径被调用，实测会让多方块成型后右边的升级卡槽插不了卡
+        // （2026-11-13 二分定位：只有改成控制器图标后才复现，回退即恢复）。
         return AEItemKey.of(this.iconSupplier.get());
     }
 
@@ -1025,21 +1064,16 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         if (controller instanceof MachineBlockEntity machine) {
             ItemStack workBlock = findHostedWorkBlock(machine);
             if (!workBlock.isEmpty()) {
-                // 阵列：用「工作方块名 + 处理阵列(扩展)样板供应仓」——与旧行为一致
                 Component workBlockName = workBlock.getHoverName();
                 if (workBlock.has(DataComponents.CUSTOM_NAME)) {
-                    // 玩家给工作方块改过名：直接用那个名字
-                    return workBlockName;
+                    return workBlockName; // 玩家给工作方块改过名：直接用那个名字
                 }
-                return workBlockName.copy().append(Component.translatable(this.extended
-                        ? "text.mi_ae2_pattern_provider.extended_processing_array_suffix"
-                        : "text.mi_ae2_pattern_provider.processing_array_suffix"));
+                // 处理阵列：工作方块名 + 「处理阵列」（如「电力高炉处理阵列」）。
+                // 终端里不再显示「…样板供应仓」这种长尾巴（2026-11-13 用户要求）。
+                return workBlockName.copy().append(Component.translatable("text.mi_ae2_pattern_provider.array_suffix"));
             }
-            // 普通多方块（电力高炉、蒸馏塔……）：用控制器自己的名字当宿主名。
-            // MachineBlockEntity#getDisplayName() = `block.<blockId>` 的翻译键，也就是玩家看到的方块名。
-            return machine.getDisplayName().copy().append(Component.translatable(this.extended
-                    ? "text.mi_ae2_pattern_provider.extended_multiblock_suffix"
-                    : "text.mi_ae2_pattern_provider.multiblock_suffix"));
+            // 普通多方块（电力高炉、蒸馏塔……）：直接用控制器名字（如「电力高炉」），不加后缀。
+            return machine.getDisplayName();
         }
         // 没接控制器 / 控制器不是 MI 机器（理论上不会出现）：回落默认名
         return Component.translatable(this.extended
@@ -1166,9 +1200,23 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         // （如 LargeTankHatch 改完调 setChanged()）。
         if (changed) {
             this.setChanged();
-            this.sync();
+            this.miae2$syncThrottled();
         }
         return true;
+    }
+
+    /** 节流后的 sync：同一 tick 只发一次包（大批量发配时每 tick 多次 sync 会明显拖慢服务端）。 */
+    private long miae2$lastSyncTick = Long.MIN_VALUE / 2;
+
+    private void miae2$syncThrottled() {
+        long now = this.level == null ? 0L : this.level.getGameTime();
+        if (now - this.miae2$lastSyncTick < 5L) {
+            return;
+        }
+        this.miae2$lastSyncTick = now;
+        if (this.level != null && !this.level.isClientSide()) {
+            this.sync();
+        }
     }
 
     /** 往自身输入槽插一份 AE 键值；返回实际能插入的数量。不支持的键类型返回 0（→ push 被拒）。 */
@@ -1227,6 +1275,16 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
         return 0L; // 化学品等其它键类型本仓没有对应槽位
     }
 
+
+    private static appeng.api.stacks.AEKey miae2$firstKey(KeyCounter counter) {
+        for (var key : counter.keySet()) {
+            if (counter.get(key) > 0) {
+                return key;
+            }
+        }
+        return null;
+    }
+
     /** 把自身输出槽里的成品搬进 returnInv，由 PatternProviderLogic 的 doWork 回注网络。 */
     private void drainOutputsToReturnInv() {
         PatternProviderReturnInventory returnInv = this.logic.getReturnInv();
@@ -1274,12 +1332,22 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
      * 已经装了半格的槽拖低，所以一种流体只锁它需要的那一格。
      */
     public void lockOutputs(IPatternDetails patternDetails) {
-        this.unlockAllOutputs();
-        this.miae2$lockItemOutputsSpread(patternDetails);
+        this.lockOutputs(patternDetails, 1L);
+    }
 
-        for (GenericStack output : patternDetails.getOutputs()) {
+    /** 按「批数」锁定输出格/储罐（合并发配后一次要吃多批材料）。 */
+    public void lockOutputs(IPatternDetails patternDetails, long batches) {
+        this.unlockAllOutputs();
+        // 锁定必须按「真实产物」来：报给 AE 的列表可能摘掉了副产物，但机器照样会产出它们，
+        // 不锁的话阵列算出的可行倍率是 0（容量/单次产量），机器根本不开工。
+        IPatternDetails full = com.miae2.ae.MePatternProviderLogic.miae2$fullPattern(patternDetails);
+        long factor = com.miae2.ae.MePatternProviderLogic.miae2$scalingFactor(patternDetails, full)
+                * Math.max(1L, batches);
+        this.miae2$lockItemOutputsSpread(full, factor);
+
+        for (GenericStack output : full.getOutputs()) {
             if (output.what() instanceof AEFluidKey fluidKey) {
-                AbstractConfigurableStack.playerLockNoOverride(fluidKey.getFluid(), output.amount(), this.fluidOutputs);
+                AbstractConfigurableStack.playerLockNoOverride(fluidKey.getFluid(), output.amount() * factor, this.fluidOutputs);
             }
         }
 
@@ -1292,11 +1360,11 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
      * <b>当前倍率上限最低</b>的那个产物（上限 = {@code 64 * 格数 / 单次产量}），把瓶颈抬平 ——
      * 一原材料出多种加工材料时，不会把所有格全给同一种产物。
      */
-    private void miae2$lockItemOutputsSpread(IPatternDetails patternDetails) {
+    private void miae2$lockItemOutputsSpread(IPatternDetails patternDetails, long factor) {
         Map<Item, Long> products = new LinkedHashMap<>();
         for (GenericStack output : patternDetails.getOutputs()) {
             if (output.what() instanceof AEItemKey itemKey) {
-                products.merge(itemKey.getItem(), Math.max(1L, output.amount()), Long::sum);
+                products.merge(itemKey.getItem(), Math.max(1L, output.amount() * factor), Long::sum);
             }
         }
         if (products.isEmpty()) {
@@ -1475,36 +1543,47 @@ public class MePatternProviderBlockEntity extends HatchBlockEntity
      * 标志被夹回之后，下一 tick 的 push 就能过）。
      */
     public boolean pushPattern(IPatternDetails patternDetails, KeyCounter[] inputHolder) {
+        // 限流：AE 有独立 tick 调度，一个游戏 tick 内可能发起几百上千次发配；
+        // 每次都会触发机器侧记账/同步，是服务端卡顿的主因。这里只接受前 N 次，其余让它下一 tick 再来。
+        long nowTick = this.level == null ? 0L : this.level.getGameTime();
+        if (nowTick != this.miae2$pushTickStamp || this.miae2$cachedCheckPattern != patternDetails) {
+            this.miae2$pushTickStamp = nowTick;
+            this.miae2$pushesThisTick = 0;
+            this.miae2$cachedCheckPattern = patternDetails;
+            this.miae2$cachedMatched = this.isMatched();
+            this.miae2$cachedBusyOrDirty = this.activePattern != patternDetails && this.miae2$machineIsBusyOrDirty();
+            this.miae2$cachedCapacityTruthful = this.miae2$outputCapacityIsTruthful(patternDetails);
+        }
+        this.miae2$pushesThisTick++;
         // 没被任何多方块匹配上就不收料：可能是还没成形，也可能是「同一阵列放了多个供应仓 → 结构被判无效」。
         // 否则 AE 会把材料灌进一个永远不会被消耗的仓里，任务就一直挂着。
-        if (!this.isMatched()) {
+        if (!this.miae2$cachedMatched) {
             return false;
         }
         if (this.activePattern != null && this.activePattern != patternDetails
                 && (this.miae2$isAnyCraftInFlight() || this.miae2$hasAnyInput() || this.miae2$hasAnyOutput())) {
             return false;
         }
-        boolean capacityIsTruthful = this.miae2$outputCapacityIsTruthful(patternDetails);
         this.miae2$enforceSlotCapacityPolicy();
-        if (!capacityIsTruthful) {
+        if (!this.miae2$cachedCapacityTruthful) {
             return false;
         }
         // 「发料前先看机器状态」——**只在换样板时挡**（用户 2026-11-10 口径修正）：
         // 同一块样板的大量合成必须**连续发料**（1 出 1 的样板遇到大单会连发很多批），
         // 等机器「输出抽干 + 输入吃空」再发会让每批都串行，吞吐掉一大截。
         // 真正危险的是「不同样板的料混进同一台机器」，所以只在 activePattern 变了且机器还脏时拒绝。
-        if (this.activePattern != patternDetails && this.miae2$machineIsBusyOrDirty()) {
+        if (this.miae2$cachedBusyOrDirty) {
             return false;
         }
         if (!this.insertPatternInputs(inputHolder, IActionSource.ofMachine(this))) {
             return false;
         }
-        if (this.activePattern != patternDetails) {
-            // 首推或换样板：按新样板重新摊开输出格锁
+        boolean switched = this.activePattern != patternDetails;
+        if (switched) {
             this.activePattern = patternDetails;
             this.idleOutputsLocked = false;
             this.lockOutputs(patternDetails);
-            LOGGER.info("[样板切换] 输出格已按新样板重新上锁：{} @ {}", patternDetails.getOutputs(), this.getBlockPos());
+            LOGGER.info("[样板切换] 输出格已按新样板上锁：{} @ {}", patternDetails.getOutputs(), this.getBlockPos());
         }
         return true;
     }

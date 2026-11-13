@@ -42,13 +42,32 @@ public final class MiAe2Config {
     public static final ModConfigSpec.IntValue QUANTUM_PARALLEL_MULTIPLIER;
 
     /**
-     * 是否让「产物又是原料」的自回收样板跳过 ExtendedAE-Plus 的智能翻倍。
+     * 是否让本 mod 的仓**不参与** ExtendedAE-Plus 的智能翻倍（默认开）。
      *
-     * <p>EAEP 的翻倍会把 N 次合成合并成一次材料包，而自回收配方要求「先有副产物才能凑够原料」，
-     * 于是 AE 的合成模拟永远判定不可合成（**原版 AE 供应仓同样会卡**，2026-11-13 用户实测）。
-     * 本仓默认对这类样板单独跳过翻倍，避免卡死；不需要这个兼容的整合包可以关掉。
+     * <p>EAEP 的翻倍会把「多次合成」合并成一次材料包，材料必须一次性备齐；碰上**自回收配方**
+     * （产物又是原料）或**跨机器循环**（A 的副产物喂 B、B 的产物又回 A）时，整条链会互相等待，
+     * 合成任务一直挂起（**原版 AE 供应仓同样会卡**，2026-11-13 实测）。
+     *
+     * <p>关掉本项 = 允许 EAEP 翻倍我们的样板（可能复现上述卡死，但小批量、无循环的配方会更快）。
      */
     public static final ModConfigSpec.BooleanValue SKIP_EAEP_DOUBLING_FOR_RECURSIVE_PATTERNS;
+
+    /**
+     * 单次「合并发配」最多合并几批（1 = 关闭合并，恢复 AE 原生一批一发）。
+     *
+     * <p>AE 每次只推 1 批材料；开启后本仓会看网络里还能凑出几批，一次性塞给机器，
+     * 缺的等下一轮。产物记账仍按 AE 那边（不会超发：上限取「AE 还在等的量」）。
+     */
+    public static final ModConfigSpec.IntValue DISPATCH_BATCH_LIMIT;
+
+    /** 每个游戏 tick 最多接受几次 AE 的 pushPattern（超出就拒绝，下一 tick 再收）。 */
+    public static final ModConfigSpec.IntValue DISPATCH_PUSHES_PER_TICK;
+
+    /** 单次合并发配的物品总量预算（只约束「额外合并」的部分，AE 自己那批不受限）。 */
+    public static final ModConfigSpec.IntValue DISPATCH_ITEM_BUDGET;
+
+    /** 单次合并发配的流体总量预算（mB，同上，只约束额外合并的部分）。 */
+    public static final ModConfigSpec.IntValue DISPATCH_FLUID_BUDGET;
     public static final ModConfigSpec SPEC;
 
     static {
@@ -69,6 +88,27 @@ public final class MiAe2Config {
                         "这类自回收配方在翻倍下会让 AE 合成模拟死循环、任务永远等待（原版 AE 供应仓同样会卡），",
                         "开启本项后本 mod 的仓只对这类样板关闭翻倍，其它样板照常享受翻倍。")
                 .define("skip_eaep_doubling_for_recursive_patterns", true);
+        DISPATCH_BATCH_LIMIT = BUILDER
+                .comment("单次合并发配最多合并几批（1 = 关闭，退回 AE 原生一批一发）。",
+                        "AE 只按原版记账，本 mod 的仓自己从网络补料、一次推给机器；",
+                        "不会超发：合并批数同时受「网络可用材料」和「AE 还在等的产物量」限制。",
+                        "调大 = 发配更快，但机器会在同一 tick 处理更多批，可能出现服务端卡顿；",
+                        "调小 = 每 tick 更平滑。默认 64。")
+                .defineInRange("dispatch_batch_limit", 64, 1, 4096);
+        DISPATCH_PUSHES_PER_TICK = BUILDER
+                .comment("每个游戏 tick 最多接受几次 AE 的 pushPattern（超出直接拒绝，让 AE 下一 tick 再试）。",
+                        "AE 有独立的 tick 调度，一个游戏 tick 内可能发起几百上千次发配；",
+                        "每次都会触发机器侧记账，是服务端卡顿的主因。默认 8，配合合并（默认每次最多 64 批）",
+                        "默认 0 = 不限制（AE 能推多少就收多少）；若某些整合包里仍卡，可设成 8~32 限流。")
+                .defineInRange("dispatch_pushes_per_tick", 0, 0, 10_000);
+        DISPATCH_ITEM_BUDGET = BUILDER
+                .comment("单次合并发配最多额外合并多少物品（只约束额外部分）。",
+                        "样板本身写得很大（一次上百万）时，这个值决定每次还能多合几批；",
+                        "调大 = 发配更快但单 tick 更重。")
+                .defineInRange("dispatch_item_budget", 2048, 0, 1_000_000);
+        DISPATCH_FLUID_BUDGET = BUILDER
+                .comment("单次合并发配最多额外合并多少 mB 流体（只约束额外部分），128000 = 128 桶。")
+                .defineInRange("dispatch_fluid_budget", 128_000, 0, 100_000_000);
         SPEC = BUILDER.build();
     }
 
@@ -117,6 +157,42 @@ public final class MiAe2Config {
             return SKIP_EAEP_DOUBLING_FOR_RECURSIVE_PATTERNS.get();
         } catch (Throwable notLoaded) {
             return true;
+        }
+    }
+
+    /** 单次合并发配的批数上限（配置未加载时按 64）。 */
+    public static int dispatchBatchLimit() {
+        try {
+            return DISPATCH_BATCH_LIMIT.get();
+        } catch (Throwable notLoaded) {
+            return 64;
+        }
+    }
+
+    /** 单次合并的物品预算（配置未加载时按 2048）。 */
+    public static long dispatchItemBudget() {
+        try {
+            return Math.max(0, DISPATCH_ITEM_BUDGET.get());
+        } catch (Throwable notLoaded) {
+            return 2048L;
+        }
+    }
+
+    /** 单次合并的流体预算 mB（配置未加载时按 128000）。 */
+    public static long dispatchFluidBudget() {
+        try {
+            return Math.max(0, DISPATCH_FLUID_BUDGET.get());
+        } catch (Throwable notLoaded) {
+            return 128_000L;
+        }
+    }
+
+    /** 每 tick 最多接受的 pushPattern 次数（0 = 不限制；配置未加载时按 0）。 */
+    public static int dispatchPushesPerTick() {
+        try {
+            return Math.max(0, DISPATCH_PUSHES_PER_TICK.get());
+        } catch (Throwable notLoaded) {
+            return 0;
         }
     }
 }

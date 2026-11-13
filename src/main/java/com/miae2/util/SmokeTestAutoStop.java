@@ -685,10 +685,7 @@ public final class SmokeTestAutoStop {
             Component multiblockActual = Component.empty();
             boolean multiblockOk = false;
             if (controller != null) {
-                Component expectedMultiblock = controller.getDisplayName().copy().append(Component.translatable(
-                        provider.isExtended()
-                                ? "text.mi_ae2_pattern_provider.extended_multiblock_suffix"
-                                : "text.mi_ae2_pattern_provider.multiblock_suffix"));
+                Component expectedMultiblock = controller.getDisplayName();
                 multiblockActual = provider.getTerminalGroup().name();
                 // 除了「等于期望」，还要确认它确实不是回落默认名（否则等于没测出分支）
                 multiblockOk = namesEqual(multiblockActual, expectedMultiblock)
@@ -729,10 +726,9 @@ public final class SmokeTestAutoStop {
                     machines.setStack(workBlock);
                     provider.miae2$setControllerPos(arrayPos);
                     arrayActual = provider.getTerminalGroup().name();
-                    Component expectedArray = workBlock.getHoverName().copy().append(Component.translatable(
-                            provider.isExtended()
-                                    ? "text.mi_ae2_pattern_provider.extended_processing_array_suffix"
-                                    : "text.mi_ae2_pattern_provider.processing_array_suffix"));
+                    // 现在显示「工作方块名 + 处理阵列」（如「电力高炉处理阵列」），不再带「…样板供应仓」长后缀
+                    Component expectedArray = workBlock.getHoverName().copy()
+                            .append(Component.translatable("text.mi_ae2_pattern_provider.array_suffix"));
                     // 生产入口也直接验一遍：必须挑中工作方块，而不是升级物品
                     boolean pickedWorkBlock = ItemStack.isSameItemSameComponents(
                             MePatternProviderBlockEntity.findHostedWorkBlock(arrayMachine), workBlock);

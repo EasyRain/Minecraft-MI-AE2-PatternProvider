@@ -68,37 +68,15 @@ public class MePatternProviderLogic extends PatternProviderLogic {
         this.be = be;
     }
 
-    private int miae2$patternLogTicks;
+    /** 原始样板列表（不触发 EAEP 兼容/环检测），给兄弟仓收集用。 */
+    public java.util.List<IPatternDetails> miae2$rawPatterns() {
+        return super.getAvailablePatterns();
+    }
 
-    /**
-     * AE 的合成计算从这里拿样板。
-     *
-     * <p>诊断日志：每 5 秒打一次样板数量与类名（排查 EAEP 翻倍问题用，发版前删掉）。
-     */
     @Override
     public java.util.List<IPatternDetails> getAvailablePatterns() {
         var patterns = super.getAvailablePatterns();
         miae2$disableEaepScalingForRecursivePatterns(patterns);
-        if (this.be.getLevel() != null && !this.be.getLevel().isClientSide()
-                && this.be.getLevel().getGameTime() - this.miae2$patternLogTicks > 100) {
-            this.miae2$patternLogTicks = (int) this.be.getLevel().getGameTime();
-            var kinds = new StringBuilder();
-            for (var details : patterns) {
-                if (kinds.length() > 0) {
-                    kinds.append(", ");
-                }
-                kinds.append(details.getClass().getSimpleName());
-            }
-            long requested = 0;
-            var grid = this.getGrid();
-            if (grid != null) {
-                for (var details : patterns) {
-                    for (var output : details.getOutputs()) {
-                        requested += grid.getCraftingService().getRequestedAmount(output.what());
-                    }
-                }
-            }
-        }
         return patterns;
     }
 
@@ -122,50 +100,23 @@ public class MePatternProviderLogic extends PatternProviderLogic {
         if (miae2$allowScalingSetter == null) {
             return;
         }
+        // EAEP 的「合并成一次材料包」碰上自回收/跨机器循环会让整条链互相等待（2026-11-13 实测），
+        // 而且判定成本高（要扫全网络样板）。翻倍现在由我们自己实现（合并发配），
+        // 所以干脆让 EAEP 完全不介入我们的样板 —— 不再做递归/成环判定。
         for (var details : patterns) {
-            if (!miae2$isEaepAware(details) || !miae2$hasRecursiveKey(details)) {
+            if (!miae2$isEaepAware(details)) {
                 continue;
             }
             try {
                 miae2$allowScalingSetter.invoke(details, false);
                 if (!miae2$eaepLogged) {
                     miae2$eaepLogged = true;
-                    LOGGER.info("[EAEP] 已对自回收样板单独关闭智能翻倍（仅这些样板；同仓其它样板不受影响）：{}",
-                            details.getOutputs());
+                    LOGGER.info("[EAEP] 已关闭 EAEP 对本站样板的智能翻倍：翻倍改由本 mod 的合并发配负责");
                 }
             } catch (Throwable ignored) {
                 // EAEP 改版也不该影响发料
             }
         }
-    }
-
-    /**
-     * 样板是否有「**同一个键既是输入又是输出**」的配方（副产物回收型）。
-     *
-     * <p>2026-11-13 用户实测定位：被卡住的配方是
-     * {@code 3000mB 硫酸锰溶液 + 4 粗钛矿 → 4 热钛锭 + 2500mB 硫酸锰溶液}
-     * —— 硫酸锰溶液同时是原料和副产物。EAEP 的智能翻倍会把样板整体放大，
-     * 这类**自回收配方**在合成模拟里会要求「先有副产物才能凑够原料」，
-     * 而副产物要先发配才能产出 ⇒ 死循环，AE 于是根本不派单（`[PushEntry]` 一条都没有）。
-     *
-     * <p>所以只对这类样板关闭放大；普通样板（哪怕带流体输出/输入）保持翻倍。
-     */
-    private static boolean miae2$hasRecursiveKey(IPatternDetails details) {
-        var outputs = new java.util.HashSet<appeng.api.stacks.AEKey>();
-        for (var output : details.getOutputs()) {
-            outputs.add(output.what());
-        }
-        if (outputs.isEmpty()) {
-            return false;
-        }
-        for (var input : details.getInputs()) {
-            for (var possible : input.getPossibleInputs()) {
-                if (outputs.contains(possible.what())) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     private static boolean miae2$isEaepAware(Object pattern) {
@@ -369,6 +320,40 @@ public class MePatternProviderLogic extends PatternProviderLogic {
         }
         IPatternDetails original = miae2$unwrapScaledPattern(patternDetails);
         return original != null && available.contains(original);
+    }
+
+    /**
+     * 取「含全部产物（含副产物）」的真实样板。
+     *
+     * <p>AE 传来的样板可能是 EAEP 的缩放包装（`ScaledProcessingPattern`）；锁定输出格/储罐必须按
+     * **真实产物**（含副产物）来 —— 不锁副产物的话，阵列算出的可行倍率是 0（容量/单次产量），机器不开工。
+     */
+    public static IPatternDetails miae2$fullPattern(IPatternDetails details) {
+        IPatternDetails cur = details;
+        for (int guard = 0; guard < 4; guard++) {
+            IPatternDetails unwrapped = miae2$unwrapScaledPattern(cur);
+            if (unwrapped != null) {
+                cur = unwrapped;
+                continue;
+            }
+            break;
+        }
+        return cur;
+    }
+
+    /** 缩放倍数（按「同一产物键在缩放后 / 真实样板」里的数量比推算，推不出就当 1）。 */
+    public static long miae2$scalingFactor(IPatternDetails scaled, IPatternDetails full) {
+        var fullByKey = new java.util.HashMap<appeng.api.stacks.AEKey, Long>();
+        for (var stack : full.getOutputs()) {
+            fullByKey.put(stack.what(), stack.amount());
+        }
+        for (var stack : scaled.getOutputs()) {
+            Long base = fullByKey.get(stack.what());
+            if (base != null && base > 0 && stack.amount() >= base) {
+                return stack.amount() / base;
+            }
+        }
+        return 1L;
     }
 
     /** 缩放样板包装 → 包装前的原始样板；不是包装则返回 null。 */

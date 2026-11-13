@@ -33,5 +33,6 @@
   "mi_ae2_pattern_provider.configuration.parallel_multiplier.tooltip": "乘在处理阵列的机器数上，作为并行批次上限（4 倍时 64 台机器 → 256 并行）。实际批次还会被输入量与输出格空间夹紧，所以调高绝不会销毁产物，只是未必能吃到。下一次配方计算即生效，不需要重启。",
   "mi_ae2_pattern_provider.configuration.quantum_overclock": "量子超频",
   "mi_ae2_pattern_provider.configuration.skip_eaep_doubling_for_recursive_patterns": "自回收样板跳过 EAEP 智能翻倍",
-  "mi_ae2_pattern_provider.configuration.skip_eaep_doubling_for_recursive_patterns.tooltip": "当样板的产物同时又是原料（副产物回收型）时，ExtendedAE-Plus 的智能翻倍会把多次合成合并成一次材料包，合成模拟会死锁——原版 AE 供应仓同样会卡住。开启本项（默认）后，本 mod 的仓只对这类样板跳过翻倍，其它样板照常获得加速。 判定只看样板自身：只有「自己的产物又是自己的原料」的样板受影响。如果日后 ExtendedAE-Plus 修好了这类配方，把本项关掉即可（或者我们会在版本里移除这段兼容），翻倍就能重新参与。"
+  "mi_ae2_pattern_provider.configuration.skip_eaep_doubling_for_recursive_patterns.tooltip": "开启（默认）时，本 mod 的仓不参与 ExtendedAE-Plus 的智能翻倍。翻倍会把多次合成合并成一次材料包，遇到「产物又是原料」的自回收配方或跨机器循环时会互相等待、任务卡死（原版 AE 供应仓同样会卡）。关掉本项则恢复由 EAEP 翻倍（可能复现卡死）。",
+  "text.mi_ae2_pattern_provider.array_suffix": "处理阵列"
 }
